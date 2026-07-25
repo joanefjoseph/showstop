@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "dev": "npx tsx src/app.ts",
+    "start": "npx tsx src/app.ts",
+    "typecheck": "npx tsc --noEmit",
+    "build": "npx tsc"
+  },
+  "dependencies": {
+    "axios": "^1.18.1",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "ioredis": "^5.11.1",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.1",
+    "@types/pg": "^8.20.0"
+  }
+}
