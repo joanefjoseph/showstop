@@ -17,10 +17,21 @@ export async function verifyFanClubMembership(
 ): Promise<void> {
   const fanToken = req.headers['x-fanclub-token'];
   const labelId = req.body.labelId || req.query.labelId;
+  const mockFanVerify = process.env.MOCK_FAN_VERIFY === 'true';
 
   if (!fanToken) {
     res.status(401).json({ error: 'Access Denied: Missing x-fanclub-token header' });
     return;
+  }
+
+  if (mockFanVerify) {
+    req.fanMembership = {
+      membershipId: 'mock-membership-id',
+      tier: 'MOCK_TIER',
+      userId: 'mock-user-id'
+    };
+
+    return next();
   }
 
   try {
