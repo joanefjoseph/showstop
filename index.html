@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Show Stop | Real Tickets for Real Fans</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header>
+    <nav class="navbar">
+      <div class="logo">Show Stop</div>
+      <button class="btn btn-primary" id="navDemoBtn">Request A Demo</button>
+    </nav>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1>Show Stop</h1>
+      <p class="tagline">No price-gouging. No scalpers. Real tickets, for real fans.</p>
+      <div class="hero-buttons">
+        <button class="btn btn-large btn-primary" id="heroDemoBtn">Request A Demo</button>
+        <a href="#about" class="btn btn-large btn-secondary">Learn More</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- About / Value Proposition -->
+  <section id="about" class="features">
+    <div class="container">
+      <h2>Fair Ticketing Built For Fans</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Fair Pricing</h3>
+          <p>Transparent fee structures with zero hidden markups or predatory pricing models.</p>
+        </div>
+        <div class="card">
+          <h3>Anti-Scalper Tech</h3>
+          <p>Advanced verification system to ensure tickets go directly into the hands of true fans.</p>
+        </div>
+        <div class="card">
+          <h3>Verified Access</h3>
+          <p>Encrypted, dynamic entry passes that eliminate fraud and duplicate ticket sales.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-container">
+      <div class="footer-info">
+        <h3>Show Stop</h3>
+        <p>123 Live Music Way, Suite 400<br>Austin, TX 78701</p>
+      </div>
+
+      <div class="footer-actions">
+        <button class="btn btn-secondary" id="contactBtn">Contact Us</button>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 Show Stop. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Demo / Contact Modal -->
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn">&times;</span>
+      <h2 id="modalTitle">Request A Demo</h2>
+      <form id="modalForm">
+        <label for="name">Name</label>
+        <input type="text" id="name" placeholder="Your Full Name" required>
+
+        <label for="email">Email</label>
+        <input type="email" id="email" placeholder="you@example.com" required>
+
+        <label for="message">Message (Optional)</label>
+        <textarea id="message" rows="4" placeholder="Tell us about your event or ticketing needs..."></textarea>
+
+        <button type="submit" class="btn btn-primary btn-full">Submit</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
