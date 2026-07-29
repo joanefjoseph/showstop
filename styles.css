@@ -56,13 +56,10 @@ header {
   text-decoration: none;
 }
 
-/* Constrain and crop the transparent logo with CSS */
 .nav-logo {
-  height: 80px;
-  width: 160px; /* Constrains the width frame */
-  object-fit: cover; /* Zooms/crops to fit inside the tight dimensions */
-  object-position: center; /* Centers on the text inside the image */
-  display: block;
+  height: 42px;
+  width: auto;
+  object-fit: contain;
 }
 
 
@@ -128,13 +125,11 @@ header {
 }
 
 .hero-logo {
-  height: 100px;
-  width: 175px;
-  object-fit: cover;
-  object-position: center;
-  border-radius: 5px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(224, 38, 165, 0.2);
-}
+  max-width: 380px;
+  width: 100%;
+  height: auto;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(224, 38, 165, 0.2);}
 
 .tagline {
   font-size: 1.35rem;
@@ -218,16 +213,36 @@ footer {
 
 
 .footer-logo {
-  height: 60px;
-  width: 175px;
-  object-fit: cover;
-  object-position: center;
-  display: block;
+  height: 48px;
+  width: auto;
   margin-bottom: 0.75rem;
-}
+  object-fit: contain;}
 
 .footer-info p {
   color: var(--text-muted);
+}
+
+.footer-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.9rem;
+}
+
+.footer-contact h3 {
+  color: #ffffff;
+  margin-bottom: 0.3rem;
+  font-size: 1rem;
+}
+
+.footer-contact a {
+  color: var(--color-teal);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.footer-contact a:hover {
+  color: var(--color-pink);
 }
 
 .footer-bottom {
