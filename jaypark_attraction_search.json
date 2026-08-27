@@ -1,0 +1,198 @@
+{
+    "_embedded": {
+        "attractions": [
+            {
+                "name": "Jay Park",
+                "type": "attraction",
+                "id": "K8vZ9172mb7",
+                "test": false,
+                "url": "https://www.ticketmaster.com/jay-park-tickets/artist/1723007",
+                "locale": "en-us",
+                "externalLinks": {
+                    "youtube": [
+                        {
+                            "url": "https://www.youtube.com/user/jaybumaom0425"
+                        }
+                    ],
+                    "twitter": [
+                        {
+                            "url": "https://twitter.com/jaybumaom"
+                        }
+                    ],
+                    "itunes": [
+                        {
+                            "url": "https://music.apple.com/us/artist/jay-park/384641776"
+                        }
+                    ],
+                    "lastfm": [
+                        {
+                            "url": "http://www.last.fm/music/Jay+Park"
+                        }
+                    ],
+                    "spotify": [
+                        {
+                            "url": "https://open.spotify.com/artist/4XDi67ZENZcbfKnvMnTYsI"
+                        }
+                    ],
+                    "wiki": [
+                        {
+                            "url": "https://en.wikipedia.org/wiki/Jay_Park"
+                        }
+                    ],
+                    "facebook": [
+                        {
+                            "url": "https://www.facebook.com/jaypaom"
+                        }
+                    ],
+                    "musicbrainz": [
+                        {
+                            "id": "3dda8202-ce15-4031-862a-77bc6759d15e",
+                            "url": "https://musicbrainz.org/artist/3dda8202-ce15-4031-862a-77bc6759d15e"
+                        }
+                    ],
+                    "instagram": [
+                        {
+                            "url": "http://instagram.com/jparkitrighthere/"
+                        }
+                    ],
+                    "homepage": [
+                        {
+                            "url": "http://www.jaypark.com/"
+                        }
+                    ]
+                },
+                "images": [
+                    {
+                        "ratio": "3_2",
+                        "url": "https://s1.ticketm.net/dam/a/30a/799a2119-006d-4e2b-96c1-eff41aba230a_RETINA_PORTRAIT_3_2.jpg",
+                        "width": 640,
+                        "height": 427,
+                        "fallback": false
+                    },
+                    {
+                        "ratio": "3_2",
+                        "url": "https://s1.ticketm.net/dam/a/30a/799a2119-006d-4e2b-96c1-eff41aba230a_ARTIST_PAGE_3_2.jpg",
+                        "width": 305,
+                        "height": 203,
+                        "fallback": false
+                    },
+                    {
+                        "ratio": "16_9",
+                        "url": "https://s1.ticketm.net/dam/a/30a/799a2119-006d-4e2b-96c1-eff41aba230a_SOURCE",
+                        "width": 2426,
+                        "height": 1365,
+                        "fallback": false
+                    },
+                    {
+                        "ratio": "16_9",
+                        "url": "https://s1.ticketm.net/dam/a/30a/799a2119-006d-4e2b-96c1-eff41aba230a_RECOMENDATION_16_9.jpg",
+                        "width": 100,
+                        "height": 56,
+                        "fallback": false
+                    },
+                    {
+                        "ratio": "16_9",
+                        "url": "https://s1.ticketm.net/dam/a/30a/799a2119-006d-4e2b-96c1-eff41aba230a_EVENT_DETAIL_PAGE_16_9.jpg",
+                        "width": 205,
+                        "height": 115,
+                        "fallback": false
+                    },
+                    {
+                        "ratio": "4_3",
+                        "url": "https://s1.ticketm.net/dam/a/30a/799a2119-006d-4e2b-96c1-eff41aba230a_CUSTOM.jpg",
+                        "width": 305,
+                        "height": 225,
+                        "fallback": false
+                    },
+                    {
+                        "ratio": "16_9",
+                        "url": "https://s1.ticketm.net/dam/a/30a/799a2119-006d-4e2b-96c1-eff41aba230a_TABLET_LANDSCAPE_16_9.jpg",
+                        "width": 1024,
+                        "height": 576,
+                        "fallback": false
+                    },
+                    {
+                        "ratio": "16_9",
+                        "url": "https://s1.ticketm.net/dam/a/30a/799a2119-006d-4e2b-96c1-eff41aba230a_RETINA_LANDSCAPE_16_9.jpg",
+                        "width": 1136,
+                        "height": 639,
+                        "fallback": false
+                    },
+                    {
+                        "ratio": "16_9",
+                        "url": "https://s1.ticketm.net/dam/a/30a/799a2119-006d-4e2b-96c1-eff41aba230a_RETINA_PORTRAIT_16_9.jpg",
+                        "width": 640,
+                        "height": 360,
+                        "fallback": false
+                    },
+                    {
+                        "ratio": "16_9",
+                        "url": "https://s1.ticketm.net/dam/a/30a/799a2119-006d-4e2b-96c1-eff41aba230a_TABLET_LANDSCAPE_LARGE_16_9.jpg",
+                        "width": 2048,
+                        "height": 1152,
+                        "fallback": false
+                    },
+                    {
+                        "ratio": "3_2",
+                        "url": "https://s1.ticketm.net/dam/a/30a/799a2119-006d-4e2b-96c1-eff41aba230a_TABLET_LANDSCAPE_3_2.jpg",
+                        "width": 1024,
+                        "height": 683,
+                        "fallback": false
+                    }
+                ],
+                "classifications": [
+                    {
+                        "primary": true,
+                        "segment": {
+                            "id": "KZFzniwnSyZfZ7v7nJ",
+                            "name": "Music"
+                        },
+                        "genre": {
+                            "id": "KnvZfZ7vAeA",
+                            "name": "Rock"
+                        },
+                        "subGenre": {
+                            "id": "KZazBEonSMnZfZ7v6F1",
+                            "name": "Pop"
+                        },
+                        "type": {
+                            "id": "KZAyXgnZfZ7v7nI",
+                            "name": "Undefined"
+                        },
+                        "subType": {
+                            "id": "KZFzBErXgnZfZ7v7lJ",
+                            "name": "Undefined"
+                        },
+                        "family": false
+                    }
+                ],
+                "upcomingEvents": {
+                    "mticket": 1,
+                    "tmr": 1,
+                    "mfx-nl": 2,
+                    "ticketmaster": 12,
+                    "trium": 3,
+                    "mfx-pl": 1,
+                    "_total": 20,
+                    "_filtered": 0
+                },
+                "_links": {
+                    "self": {
+                        "href": "/discovery/v2/attractions/K8vZ9172mb7?locale=en-us"
+                    }
+                }
+            }
+        ]
+    },
+    "_links": {
+        "self": {
+            "href": "/discovery/v2/attractions.json?keyword=Jay+Park"
+        }
+    },
+    "page": {
+        "size": 20,
+        "totalElements": 1,
+        "totalPages": 1,
+        "number": 0
+    }
+}
