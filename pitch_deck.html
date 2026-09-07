@@ -244,6 +244,41 @@
     max-width: 494px !important;
   }
 
+  .page8-top-wireframes {
+    align-items: flex-start;
+  }
+
+  .page8-top-wireframes .wireframe-screen {
+    height: 100%;
+  }
+
+  .page8-top-wireframes svg {
+    overflow: visible;
+  }
+
+  .page8-top-wireframes .map-viewport {
+    overflow: visible;
+    clip-path: inset(-100% 0 -100% 0);
+  }
+
+  .page8-down-arrow {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    margin-top: 10px;
+    padding: 2px 0;
+  }
+
+  .page8-down-arrow .flow-badge {
+    position: absolute;
+    left: calc(50% + 24px);
+    top: 50%;
+    margin-bottom: 0;
+    transform: translateY(-50%);
+  }
+
   .flow-arrow-col {
     display: flex;
     flex-direction: column;
@@ -1181,141 +1216,142 @@
       <div class="deck-card" style="padding: 10px; background: #0d0d12; border: 1px solid #1f1f28; gap: 8px; justify-content: space-between;">
         
         <!-- Top Half: 2 Wireframes Side-by-Side -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1;">
+        <div class="page8-top-wireframes" style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; flex: 1;">
           
           <!-- Top Left: Ticketmaster Wireframe -->
           <div class="wireframe-screen wireframe-compact" style="box-shadow: 2px 2px 0 var(--ink);">
-            <div style="display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: #fff; border-bottom: 1px solid var(--border);">
-              <span class="font-mono-display" style="font-size: 8px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">New Ticketmaster "Tickets" Tab — Real-Time Seat Selection</span>
-            </div>
-            <div style="background: rgb(26, 26, 26); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 2px 6px; display: flex; align-items: center; gap: 4px;">
+            <div style="background: rgb(240, 240, 236); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 2px 6px; display: flex; align-items: center; gap: 4px;">
               <div style="display: flex; gap: 3px;">
                 <div style="width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
                 <div style="width: 5px; height: 5px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
                 <div style="width: 5px; height: 5px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
               </div>
-              <div class="font-mono-display" style="flex: 1; background: rgb(10, 10, 10); border: 1px solid rgba(255, 255, 255, 0.15); padding: 1px 4px; font-size: 6.5px; color: rgba(255, 255, 255, 0.6); border-radius: 1px; display: flex; align-items: center; gap: 3px;">
-                <span style="color: var(--success);">🔒</span>weverse.io/bts/tickets
+              <div class="font-mono-display" style="flex: 1; background: #fff; border: 1px solid var(--border); padding: 1px 4px; font-size: 6.5px; color: var(--ink-muted); border-radius: 1px; display: flex; align-items: center; gap: 3px;">
+                <span style="color: var(--success);"></span>ticketmaster.com/bts-metlife/event/12345
               </div>
             </div>
-            <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); background: rgb(10, 10, 10); padding: 0 6px; display: flex; align-items: center; font-size: 7px;">
-              <span class="font-mono-display" style="font-weight: 700; color: #fff; margin-right: 6px; padding: 3px 0;">Weverse</span>
-              <span class="font-mono-display" style="padding: 3px 4px; color: rgba(255, 255, 255, 0.5);">Feed</span>
-              <span class="font-mono-display" style="padding: 3px 4px; color: rgba(255, 255, 255, 0.5);">Notice</span>
-              <span class="font-mono-display" style="padding: 3px 4px; border-bottom: 1.5px solid var(--accent); font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 2px;">
-                🎟 Tickets <span style="background: var(--accent); color: #fff; font-size: 5px; padding: 0 2px; border-radius: 1px;">NEW</span>
+            <div style="background: rgb(0, 72, 153); padding: 0 6px; display: flex; align-items: center; justify-content: space-between;">
+              <span class="font-mono-display" style="font-size: 8px; font-weight: 700; color: #fff;">ticketmaster</span>
+              <span class="font-mono-display" style="font-size: 8px; color: rgba(255, 255, 255, 0.75);">Sign In</span>
               </span>
             </div>
             <div style="padding: 3px 6px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #fff;">
               <div>
                 <div style="font-size: 7.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;">BTS — MetLife Stadium</div>
-                <div class="font-mono-display" style="font-size: 6px; color: var(--success);">Backend: TM Partner API</div>
-              </div>
-              <div class="font-mono-display" style="font-size: 6px; color: var(--ink-muted); border: 1px solid var(--border); padding: 1px 3px;">
-                GET /availability
               </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0px; flex: 1; background: #fff;">
-              <div style="border-right: 1px solid var(--border); padding: 4px; display: flex; align-items: center; justify-content: center; background: #f8f8f5;">
+              <div class="map-viewport" style="border-right: 1px solid var(--border); padding: 4px; display: flex; align-items: center; justify-content: center; background: #f8f8f5;">
                 <svg viewBox="0 0 200 130" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; max-height: 55px;">
                   <rect width="200" height="130" fill="#f8f8f5"></rect>
-                  <ellipse cx="100" cy="65" rx="90" ry="55" stroke="#d0d0c8" stroke-width="1" fill="#f0f0ec"></ellipse>
-                  <ellipse cx="100" cy="65" rx="65" ry="38" stroke="#c0c0b8" stroke-width="1" fill="#e8e8e2"></ellipse>
-                  <ellipse cx="100" cy="65" rx="45" ry="25" stroke="#b0b0a8" stroke-width="1" fill="#dcdcd8"></ellipse>
-                  <rect x="78" y="55" width="44" height="20" rx="1" fill="#333" stroke="#0a0a0a" stroke-width="0.5"></rect>
-                  <text x="100" y="67" text-anchor="middle" fill="#fff" font-size="6" font-family="JetBrains Mono, monospace">STAGE</text>
-                  <rect x="83" y="75" width="14" height="8" rx="0.5" fill="var(--accent)" opacity="0.9"></rect>
-                  <text x="90" y="81" text-anchor="middle" fill="#fff" font-size="5" font-family="JetBrains Mono, monospace">FL A1</text>
-                  <rect x="93" y="75" width="14" height="8" rx="0.5" fill="#c8c8c0"></rect>
-                  <text x="100" y="81" text-anchor="middle" fill="#555" font-size="5" font-family="JetBrains Mono, monospace">FL A2</text>
+                  <ellipse cx="100" cy="65" rx="90" ry="55" transform="translate(100 65) scale(1.7 2.21) translate(-100 -65)" stroke="#d0d0c8" stroke-width="1" fill="#f0f0ec"></ellipse>
+                  <rect x="40" y="35" width="120" height="60" transform="translate(100 65) scale(1.7 2.21) translate(-100 -65)" stroke="#c0c0b8" stroke-width="1" fill="#e8e8e2"></rect>
+                  <ellipse cx="100" cy="65" rx="45" ry="25" transform="translate(100 65) scale(1.7 2.21) translate(-100 -65)" stroke="#b0b0a8" stroke-width="1" fill="#dcdcd8"></ellipse>
+                  <rect x="69" y="51" width="62" height="28" rx="1" fill="#333" stroke="#0a0a0a" stroke-width="0.5"></rect>
+                  <text x="100" y="69" text-anchor="middle" fill="#fff" font-size="8" font-family="JetBrains Mono, monospace">STAGE</text>
+                  <rect x="83" y="95" width="14" height="8" rx="0.5" fill="var(--accent)" opacity="0.9"></rect>
+                  <text x="90" y="101" text-anchor="middle" fill="#fff" font-size="5" font-family="JetBrains Mono, monospace">FL A1</text>
+                  <rect x="93" y="95" width="14" height="8" rx="0.5" fill="#c8c8c0"></rect>
+                  <text x="100" y="101" text-anchor="middle" fill="#555" font-size="5" font-family="JetBrains Mono, monospace">FL A2</text>
+                  <text x="100" y="178" text-anchor="middle" fill="#999" font-size="6" font-family="JetBrains Mono, monospace">100 LEVEL</text>
+                  <rect x="-25" y="195" width="8" height="8" fill="var(--accent)" rx="0.5"></rect>
+                  <text x="-14" y="202" fill="var(--accent)" font-size="6" font-family="JetBrains Mono, monospace">Selected</text>
                 </svg>
               </div>
               <div style="padding: 4px 6px; display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
-                  <div class="font-mono-display" style="font-size: 6.5px; font-weight: 600; color: var(--ink-muted); margin-bottom: 2px;">TM Live Stream</div>
+                  <div class="font-mono-display" style="font-size: 6.5px; font-weight: 600; color: var(--ink-muted); margin-bottom: 2px;">Available Sections</div>
                   <div style="border: 1px solid var(--accent); background: rgb(240, 245, 255); padding: 2px 4px; border-radius: 1px;">
                     <div class="font-mono-display" style="font-size: 6.5px; font-weight: 600;">Floor A1 — $450</div>
+                    <div class="font-mono-display" style="font-size: 6px; color: var(--accent); margin-top: 1px;">2 Seats Selected [A11, A12]</div>
+                  </div>
+                  <div style="border: 1px solid var(--border); background: #fff; padding: 2px 4px; border-radius: 1px; margin-top: 3px;">
+                    <div class="font-mono-display" style="font-size: 6px; font-weight: 400;">Section 102 (Lower Bowl) — $220</div>
                   </div>
                 </div>
-                <div style="background: var(--accent); color: #fff; padding: 3px 4px; font-size: 6.5px; font-family: 'JetBrains Mono', monospace; font-weight: 600; border-radius: 1px; text-align: center;">
-                  🔒 Reserve & Lock
+                <div style="background: var(--success); color: #fff; padding: 3px 4px; font-size: 6.5px; font-family: 'JetBrains Mono', monospace; font-weight: 600; border-radius: 1px; text-align: center;">
+                  Reserve Tickets
                 </div>
               </div>
             </div>
-            <div style="background: rgb(232, 255, 244); border-left: 2px solid var(--success); padding: 3px 6px; margin: 2px 4px 4px; border-radius: 1px;">
-              <div class="font-mono-display" style="font-size: 6px; font-weight: 700; color: var(--success);">Ticketmaster API Connected</div>
+            <div style="background: rgb(255, 240, 235); border-left: 2px solid var(--accent-hot); padding: 3px 6px; margin: 2px 4px 4px; border-radius: 1px;">
+              <div class="font-mono-display" style="font-size: 6px; font-weight: 700; color: var(--accent-hot);">Hosted in Ticketmaster's ecosystem</div>
             </div>
           </div>
 
           <!-- Top Right: AXS Wireframe -->
           <div class="wireframe-screen wireframe-compact" style="box-shadow: 2px 2px 0 var(--ink);">
-            <div style="display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: #fff; border-bottom: 1px solid var(--border);">
-              <span class="font-mono-display" style="font-size: 8px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">New AXS "Tickets" Tab — Real-Time Seat Selection</span>
-            </div>
-            <div style="background: rgb(26, 26, 26); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 2px 6px; display: flex; align-items: center; gap: 4px;">
+            <div style="background: rgb(240, 240, 236); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 2px 6px; display: flex; align-items: center; gap: 4px;">
               <div style="display: flex; gap: 3px;">
                 <div style="width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
                 <div style="width: 5px; height: 5px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
                 <div style="width: 5px; height: 5px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
               </div>
-              <div class="font-mono-display" style="flex: 1; background: rgb(10, 10, 10); border: 1px solid rgba(255, 255, 255, 0.15); padding: 1px 4px; font-size: 6.5px; color: rgba(255, 255, 255, 0.6); border-radius: 1px; display: flex; align-items: center; gap: 3px;">
-                <span style="color: var(--success);">🔒</span>weverse.io/bts/tickets
+              <div class="font-mono-display" style="flex: 1; background: #fff; border: 1px solid var(--border); padding: 1px 4px; font-size: 6.5px; color: var(--ink-muted); border-radius: 1px; display: flex; align-items: center; gap: 3px;">
+                <span style="color: var(--success);"></span>axs.com/bts-crypto/event/56789
               </div>
             </div>
-            <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); background: rgb(10, 10, 10); padding: 0 6px; display: flex; align-items: center; font-size: 7px;">
-              <span class="font-mono-display" style="font-weight: 700; color: #fff; margin-right: 6px; padding: 3px 0;">Weverse</span>
-              <span class="font-mono-display" style="padding: 3px 4px; color: rgba(255, 255, 255, 0.5);">Feed</span>
-              <span class="font-mono-display" style="padding: 3px 4px; color: rgba(255, 255, 255, 0.5);">Notice</span>
-              <span class="font-mono-display" style="padding: 3px 4px; border-bottom: 1.5px solid var(--accent); font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 2px;">
-                🎟 Tickets <span style="background: var(--accent); color: #fff; font-size: 5px; padding: 0 2px; border-radius: 1px;">NEW</span>
+            <div style="background:  var(--accent-hot); padding: 0 6px; display: flex; align-items: center; justify-content: space-between;">
+              <span class="font-mono-display" style="font-size: 8px; font-weight: 700; color: #fff;">AXS</span>
+              <span class="font-mono-display" style="font-size: 8px; color: rgba(255, 255, 255, 0.75);">Sign In</span>
               </span>
             </div>
             <div style="padding: 3px 6px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #fff;">
               <div>
                 <div style="font-size: 7.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;">BTS — Crypto.com Arena</div>
-                <div class="font-mono-display" style="font-size: 6px; color: var(--success);">Backend: AXS Partner API</div>
-              </div>
-              <div class="font-mono-display" style="font-size: 6px; color: var(--ink-muted); border: 1px solid var(--border); padding: 1px 3px;">
-                GET /availability
               </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0px; flex: 1; background: #fff;">
-              <div style="border-right: 1px solid var(--border); padding: 4px; display: flex; align-items: center; justify-content: center; background: #f8f8f5;">
-                <svg viewBox="0 0 200 130" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; max-height: 55px;">
-                  <rect width="200" height="130" fill="#f8f8f5"></rect>
-                  <ellipse cx="100" cy="65" rx="90" ry="55" stroke="#d0d0c8" stroke-width="1" fill="#f0f0ec"></ellipse>
-                  <ellipse cx="100" cy="65" rx="65" ry="38" stroke="#c0c0b8" stroke-width="1" fill="#e8e8e2"></ellipse>
-                  <ellipse cx="100" cy="65" rx="45" ry="25" stroke="#b0b0a8" stroke-width="1" fill="#dcdcd8"></ellipse>
-                  <rect x="78" y="55" width="44" height="20" rx="1" fill="#333" stroke="#0a0a0a" stroke-width="0.5"></rect>
-                  <text x="100" y="67" text-anchor="middle" fill="#fff" font-size="6" font-family="JetBrains Mono, monospace">STAGE</text>
-                  <rect x="83" y="75" width="14" height="8" rx="0.5" fill="var(--accent)" opacity="0.9"></rect>
-                  <text x="90" y="81" text-anchor="middle" fill="#fff" font-size="5" font-family="JetBrains Mono, monospace">FL A1</text>
-                  <rect x="93" y="75" width="14" height="8" rx="0.5" fill="#c8c8c0"></rect>
-                  <text x="100" y="81" text-anchor="middle" fill="#555" font-size="5" font-family="JetBrains Mono, monospace">FL A2</text>
-                </svg>
-              </div>
-              <div style="padding: 4px 6px; display: flex; flex-direction: column; justify-content: space-between;">
+              <div style="padding: 4px 6px; display: flex; flex-direction: column; justify-content: flex-end;">
                 <div>
-                  <div class="font-mono-display" style="font-size: 6.5px; font-weight: 600; color: var(--ink-muted); margin-bottom: 2px;">AXS Live Stream</div>
+                  <div class="font-mono-display" style="font-size: 6.5px; font-weight: 600; color: var(--ink-muted); margin-bottom: 2px;">Available Sections</div>
                   <div style="border: 1px solid var(--accent); background: rgb(240, 245, 255); padding: 2px 4px; border-radius: 1px;">
                     <div class="font-mono-display" style="font-size: 6.5px; font-weight: 600;">Floor A1 — $450</div>
+                    <div class="font-mono-display" style="font-size: 6px; color: var(--accent); margin-top: 1px;">2 Seats Selected [A11, A12]</div>
+                  </div>
+                  <div style="border: 1px solid var(--border); background: #fff; padding: 2px 4px; border-radius: 1px; margin-top: 3px;">
+                    <div class="font-mono-display" style="font-size: 6px; font-weight: 400;">Section 102 (Lower Bowl) — $220</div>
                   </div>
                 </div>
-                <div style="background: var(--accent); color: #fff; padding: 3px 4px; font-size: 6.5px; font-family: 'JetBrains Mono', monospace; font-weight: 600; border-radius: 1px; text-align: center;">
-                  🔒 Reserve & Lock
+                <div style="background: var(--success); color: #fff; padding: 3px 4px; font-size: 6.5px; font-family: 'JetBrains Mono', monospace; font-weight: 600; border-radius: 1px; text-align: center; margin-top: 8px;">
+                  Reserve Tickets
                 </div>
               </div>
+              <div class="map-viewport" style="border-right: 1px solid var(--border); padding: 4px; display: flex; align-items: center; justify-content: center; background: #f8f8f5;">
+                <svg viewBox="0 0 200 130" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; max-height: 55px;">
+                  <rect width="200" height="130" fill="#f8f8f5"></rect>
+                  <rect x="10" y="10" width="180" height="110" transform="translate(100 65) scale(1.7 2.21) translate(-100 -65)" stroke="#d0d0c8" stroke-width="1" fill="#f0f0ec"></rect>
+                  <ellipse cx="100" cy="65" rx="85" ry="38" transform="translate(100 65) scale(1.7 2.21) translate(-100 -65)" stroke="#c0c0b8" stroke-width="1" fill="#e8e8e2"></ellipse>
+                  <rect x="55" y="40" width="90" height="50" transform="translate(100 65) scale(1.7 2.21) translate(-100 -65)" stroke="#b0b0a8" stroke-width="1" fill="#dcdcd8"></rect>
+                  <rect x="69" y="51" width="62" height="28" rx="1" fill="#333" stroke="#0a0a0a" stroke-width="0.5"></rect>
+                  <text x="100" y="69" text-anchor="middle" fill="#fff" font-size="8" font-family="JetBrains Mono, monospace">STAGE</text>
+                  <rect x="83" y="95" width="14" height="8" rx="0.5" fill="var(--accent)" opacity="0.9"></rect>
+                  <text x="90" y="101" text-anchor="middle" fill="#fff" font-size="5" font-family="JetBrains Mono, monospace">FL A1</text>
+                  <rect x="93" y="95" width="14" height="8" rx="0.5" fill="#c8c8c0"></rect>
+                  <text x="100" y="101" text-anchor="middle" fill="#555" font-size="5" font-family="JetBrains Mono, monospace">FL A2</text>
+                  <text x="100" y="178" text-anchor="middle" fill="#999" font-size="6" font-family="JetBrains Mono, monospace">100 LEVEL</text>
+                  <rect x="-25" y="-25" width="8" height="8" fill="var(--accent)" rx="0.5"></rect>
+                  <text x="-14" y="-18" fill="var(--accent)" font-size="6" font-family="JetBrains Mono, monospace">Selected</text>
+                </svg>
+              </div>
             </div>
-            <div style="background: rgb(232, 255, 244); border-left: 2px solid var(--success); padding: 3px 6px; margin: 2px 4px 4px; border-radius: 1px;">
-              <div class="font-mono-display" style="font-size: 6px; font-weight: 700; color: var(--success);">AXS API Connected</div>
+            <div style="background: rgb(255, 240, 235); border-left: 2px solid var(--accent-hot); padding: 3px 6px; margin: 2px 4px 4px; border-radius: 1px;">
+              <div class="font-mono-display" style="font-size: 6px; font-weight: 700; color: var(--accent-hot);">Hosted in AXS's ecosystem</div>
             </div>
           </div>
 
         </div>
 
+        <div class="page8-down-arrow">
+          <span class="flow-badge" style="background: var(--success);">UNIFICATION</span>
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+            <path d="M12 5V19M12 19L6 13M12 19L18 13" stroke="#0D946D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
         <!-- Bottom Half: 1 Wireframe Identical to Page 5 Frame 2B -->
-        <div style="flex: 1; display: flex;">
-          <div class="wireframe-screen" style="width: 100%;">
+        <div style="flex: 1; display: flex; justify-content: center;">
+          <div class="wireframe-screen" style="width: 60%;">
             <div style="display: flex; align-items: center; gap: 8px; padding: 4px 10px; background: #fff; border-bottom: 1px solid var(--border);">
               <span class="font-mono-display" style="font-size: 10px; font-weight: 600; color: var(--ink);">New Weverse "Tickets" Tab — Real-Time Seat Selection</span>
             </div>
@@ -1341,9 +1377,6 @@
               <div>
                 <div style="font-size: 9.5px; font-weight: 700;">BTS WORLD TOUR 'ARIRANG' — New York (MetLife Stadium)</div>
                 <div class="font-mono-display" style="font-size: 7.5px; color: var(--success); margin-top: 1px;">Presale Access: 🟢 UNLOCKED (ARMY Regular Tier)</div>
-              </div>
-              <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted); border: 1px solid var(--border); padding: 1px 5px;">
-                GET /events/:id/availability
               </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0px; flex: 1; background: #fff;">
@@ -1478,7 +1511,7 @@
   <div class="slide" id="slide-10">
     <div class="watermark-bg">SHOW STOP</div>
     <div class="slide-header">
-      <div class="slide-step-badge" style="color: var(--ss-pink);">05 // Call to Action</div>
+      <div class="slide-step-badge" style="color: var(--ss-pink);">Become A Partner</div>
       <h1 class="slide-title">Join Our Early Technology Partner Beta (Free Through Dec 2026)</h1>
     </div>
 
