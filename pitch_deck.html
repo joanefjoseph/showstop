@@ -1,0 +1,1554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Show Stop — SaaS Pitch Deck</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ss-pink: #D9529E;
+    --ss-pink-glow: rgba(217, 82, 158, 0.25);
+    --ss-green: #0D946D;
+    --ss-green-glow: rgba(13, 148, 109, 0.25);
+    --ss-gradient: linear-gradient(135deg, #D9529E 0%, #8A68B0 50%, #0D946D 100%);
+    --bg-dark: #070709;
+    --bg-card: #101014;
+    --border-dark: #222228;
+    --border-highlight: #33333f;
+
+    /* Exact Figma Source CSS Variables */
+    --ink: #0a0a0a;
+    --ink-muted: #555555;
+    --border: #d0d0c8;
+    --accent: #0047ff;
+    --accent-hot: #ff3c00;
+    --success: #00b86b;
+    --warn: #ff9500;
+    --panel: #ffffff;
+    --panel-dark: #0a0a0a;
+    --radius: 2px;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: 'Inter', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    background: #000;
+    color: #f4f4f5;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .deck-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    padding: 22px 36px;
+    display: none;
+    flex-direction: column;
+    justify-content: space-between;
+    background: radial-gradient(circle at top right, rgba(217, 82, 158, 0.08) 0%, rgba(13, 148, 109, 0.05) 35%, var(--bg-dark) 70%);
+    overflow-y: auto;
+  }
+
+  .slide.active { display: flex; }
+
+  #slide-4 {
+    justify-content: flex-start;
+  }
+
+  header.deck-nav {
+    height: 50px;
+    border-bottom: 1px solid var(--border-dark);
+    background: rgba(7, 7, 9, 0.95);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 100;
+  }
+
+  .brand-logo-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+  }
+
+  .brand-crowd-icon {
+    width: 26px;
+    height: 26px;
+    background: #000;
+    border: 1px solid #333;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .brand-title-gradient {
+    font-family: var(--font-sans);
+    font-weight: 900;
+    font-size: 16px;
+    letter-spacing: -0.04em;
+    background: var(--ss-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-transform: uppercase;
+  }
+
+  .brand-logo-wrap .brand-title-gradient {
+    display: inline-block;
+    font-style: italic;
+    flex-shrink: 0;
+    padding-right: 8px;
+  }
+
+  #slide-1 .brand-title-gradient {
+    display: inline-block;
+    font-style: italic;
+    padding-right: 8px;
+  }
+
+  .nav-controls { display: flex; align-items: center; gap: 12px; }
+
+  .nav-btn {
+    background: #141418;
+    color: #a1a1aa;
+    border: 1px solid var(--border-dark);
+    padding: 5px 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .nav-btn:hover {
+    background: var(--ss-pink);
+    color: #fff;
+    border-color: var(--ss-pink);
+  }
+
+  .slide-indicator {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #71717a;
+  }
+
+  .slide-header { margin-bottom: 12px; }
+
+  .slide-step-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ss-pink);
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .slide-title {
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+  }
+
+  .gradient-text {
+    background: var(--ss-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    align-items: stretch;
+    flex: 1;
+  }
+
+  .grid-3col {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    align-items: stretch;
+    flex: 1;
+  }
+
+  .deck-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  /* Exact Figma Wireframe Classes */
+  .font-mono-display {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .wireframe-screen {
+    border: 1.5px solid var(--ink);
+    background: var(--panel);
+    border-radius: var(--radius);
+    box-shadow: 3px 3px 0 var(--ink);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100%;
+  }
+
+  .wireframe-compact {
+    font-size: 75%;
+  }
+
+  .problem-wireframes {
+    height: 70%;
+    flex: none;
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+
+  .solution-wireframes {
+    height: 70%;
+    flex: none;
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+
+  .monetization-wireframe {
+    height: 70%;
+    align-self: flex-start;
+    width: 130% !important;
+    max-width: 494px !important;
+  }
+
+  .flow-arrow-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+  }
+
+  .flow-badge {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    font-weight: 800;
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 2px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  .watermark-bg {
+    position: absolute;
+    bottom: 20px;
+    right: 24px;
+    opacity: 0.04;
+    font-size: 64px;
+    font-weight: 900;
+    font-style: italic;
+    font-family: var(--font-sans);
+    color: #fff;
+    pointer-events: none;
+    letter-spacing: -0.05em;
+  }
+</style>
+</head>
+<body>
+
+<header class="deck-nav">
+  <div class="brand-logo-wrap">
+    <div class="brand-crowd-icon">
+      <svg width="18" height="18" viewBox="0 0 100 100" fill="none">
+        <rect x="5" y="5" width="90" height="90" rx="20" fill="#000"/>
+        <circle cx="5" cy="50" r="12" fill="#070709"/>
+        <circle cx="95" cy="50" r="12" fill="#070709"/>
+        <circle cx="50" cy="40" r="7" fill="#D9529E"/>
+        <path d="M43 65 L43 50 L57 50 L57 65 Z" fill="#D9529E"/>
+        <path d="M38 42 L43 50 M62 42 L57 50" stroke="#D9529E" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="31" cy="52" r="6" fill="#D9529E"/>
+        <path d="M26 73 L26 60 L36 60 L36 73 Z" fill="#D9529E"/>
+        <circle cx="69" cy="52" r="6" fill="#0D946D"/>
+        <path d="M64 73 L64 60 L74 60 L74 73 Z" fill="#0D946D"/>
+        <circle cx="41" cy="62" r="6" fill="#0D946D"/>
+        <path d="M36 82 L36 70 L46 70 L46 82 Z" fill="#0D946D"/>
+        <circle cx="59" cy="62" r="6" fill="#D9529E"/>
+        <path d="M54 82 L54 70 L64 70 L64 82 Z" fill="#D9529E"/>
+      </svg>
+    </div>
+    <span class="brand-title-gradient">SHOW STOP</span>
+    <span style="font-family: var(--font-mono); font-size: 10px; color: #71717a; border-left: 1px solid #333; padding-left: 8px;">TICKETING MIDDLEWARE</span>
+  </div>
+  <div class="nav-controls">
+    <span class="slide-indicator" id="slideNum">Slide 1 / 10</span>
+    <button class="nav-btn" onclick="prevSlide()">◀ Prev</button>
+    <button class="nav-btn" onclick="nextSlide()">Next ▶</button>
+  </div>
+</header>
+
+<div class="deck-container">
+
+  <!-- PAGE 1: TITLE PAGE -->
+  <div class="slide active" id="slide-1">
+    <div class="watermark-bg">SHOW STOP</div>
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 16px;">
+      
+      <div style="background: rgba(0,0,0,0.8); border: 1.5px solid #222; padding: 10px 22px; border-radius: 12px; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.8);">
+        <svg width="24" height="24" viewBox="0 0 100 100" fill="none">
+          <rect x="5" y="5" width="90" height="90" rx="20" fill="#000"/>
+          <circle cx="5" cy="50" r="12" fill="#121216"/>
+          <circle cx="95" cy="50" r="12" fill="#121216"/>
+          <circle cx="50" cy="40" r="7" fill="#D9529E"/>
+          <path d="M43 65 L43 50 L57 50 L57 65 Z" fill="#D9529E"/>
+          <circle cx="31" cy="52" r="6" fill="#D9529E"/>
+          <path d="M26 73 L26 60 L36 60 L36 73 Z" fill="#D9529E"/>
+          <circle cx="69" cy="52" r="6" fill="#0D946D"/>
+          <path d="M64 73 L64 60 L74 60 L74 73 Z" fill="#0D946D"/>
+        </svg>
+        <span style="font-size: 22px; font-weight: 900; letter-spacing: -0.04em;" class="brand-title-gradient">SHOW STOP</span>
+      </div>
+
+      <div style="border-bottom: 2px solid; border-image: var(--ss-gradient) 1; width: 140px; margin: 4px 0;"></div>
+
+      <h1 style="font-size: 42px; font-weight: 900; letter-spacing: -0.03em; max-width: 840px; line-height: 1.15;">
+        Your Platform. Their Infrastructure. <br><span class="gradient-text">Zero Redirects.</span>
+      </h1>
+
+      <p style="font-size: 15px; color: #a1a1aa; max-width: 640px; line-height: 1.6;">
+        White-label tour ticketing middleware that closes the seam between artist ecosystems and primary ticketing APIs to protect fans and maximize tour monetization.
+      </p>
+
+      <div style="font-family: var(--font-mono); font-size: 12px; color: #71717a; margin-top: 14px;">
+        Presented by <strong style="color:#fff;">Joane Joseph</strong>, Founder & CEO | <span style="color: var(--ss-pink);">www.showstop.io</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 2: THE HOOK -->
+  <div class="slide" id="slide-2">
+    <div class="watermark-bg">SHOW STOP</div>
+    <div class="slide-header">
+      <div class="slide-step-badge">The Breaking Point</div>
+      <h1 class="slide-title">Fandom Has Tiers. Ticketing Tech Should Recognize Them.</h1>
+    </div>
+
+    <div class="grid-2col">
+      <div class="deck-card" style="justify-content: center; gap: 16px;">
+        <h2 style="font-size: 22px; font-weight: 800; line-height: 1.35; color: #fff;">
+          "An artist sells out a venue in 12 minutes—yet a third of fans who clicked 'Buy' never got a ticket."
+        </h2>
+        <p style="color: #a1a1aa; font-size: 13.5px; line-height: 1.6;">
+          If a fan has streamed 10,000 minutes of an artist, bought every album, and pays for an official fanclub membership, they shouldn’t have the exact same queue priority as a scalper script created 5 minutes ago.
+        </p>
+        <div style="background: #14141a; border-left: 3px solid var(--ss-pink); padding: 12px 14px; border-radius: 2px;">
+          <div style="font-family: var(--font-mono); font-size: 11px; color: var(--ss-pink); font-weight: 700;">The Problem Isn't The Primary Ticketing Vendors.</div>
+          <div style="font-size: 12px; color: #cbd5e1; margin-top: 3px;">
+            Leading primary ticketing providers are good at processing tickets at scale. The problem is <strong>the seam</strong>—the jarring moment where a fan leaves the artist's world and enters a generic, vulnerable third-party portal.
+          </div>
+        </div>
+      </div>
+
+      <div class="deck-card" style="background: #0d0d12; border: 1px solid #1f1f28; justify-content: center; gap: 12px;">
+        <div style="font-family: var(--font-mono); font-size: 10px; color: var(--ss-green); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700;">
+          The High-Demand Tour Reality
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="border: 1px solid #272732; background: #121218; padding: 12px; border-radius: 4px;">
+            <div style="font-size: 12.5px; font-weight: 700; color: #f87171;">⏳ Exhausting Queue Bottlenecks</div>
+            <div style="font-size: 11px; color: #a1a1aa; margin-top: 2px;">Hours in queue only to get bounced by random account crashes.</div>
+          </div>
+          <div style="border: 1px solid #272732; background: #121218; padding: 12px; border-radius: 4px;">
+            <div style="font-size: 12.5px; font-weight: 700; color: var(--ss-pink);">🔓 Leaked Presale Passcodes</div>
+            <div style="font-size: 11px; color: #a1a1aa; margin-top: 2px;">Static 8-digit codes shared and scraped by broker bots in minutes.</div>
+          </div>
+          <div style="border: 1px solid #272732; background: #121218; padding: 12px; border-radius: 4px;">
+            <div style="font-size: 12.5px; font-weight: 700; color: var(--ss-green);">📉 100% Lost Ecosystem Monetization</div>
+            <div style="font-size: 11px; color: #a1a1aa; margin-top: 2px;">Zero post-sale tour merch or VIP soundcheck upgrades captured by label.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 3: THE EXECUTIVE PITCH -->
+  <div class="slide" id="slide-3">
+    <div class="watermark-bg">SHOW STOP</div>
+    <div class="slide-header">
+      <div class="slide-step-badge">Core Architecture</div>
+      <h1 class="slide-title">Direct-to-Consumer Tour Ticketing for Artist Ecosystems</h1>
+    </div>
+
+    <div class="grid-2col">
+      <div class="deck-card" style="justify-content: center; gap: 16px;">
+        <h2 style="font-size: 21px; font-weight: 700; line-height: 1.35;">
+          Keep Fans Inside Your Universe From Announcement to Venue Entry.
+        </h2>
+        <p style="color: #a1a1aa; font-size: 13px; line-height: 1.6;">
+          Show Stop is a white-label middleware platform that connects primary ticketing APIs (Ticketmaster, AXS) directly into official artist websites and fanclub hubs (like Weverse).
+        </p>
+        <div style="display: flex; gap: 10px; margin-top: 6px;">
+          <div style="background: rgba(217, 82, 158, 0.1); border: 1px solid var(--ss-pink); padding: 10px 14px; border-radius: 4px; flex: 1;">
+            <div style="font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--ss-pink);">0</div>
+            <div style="font-size: 10px; color: #fbcfe8; font-family: var(--font-mono);">External Redirects</div>
+          </div>
+          <div style="background: rgba(13, 148, 109, 0.1); border: 1px solid var(--ss-green); padding: 10px 14px; border-radius: 4px; flex: 1;">
+            <div style="font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--ss-green);">+15-30%</div>
+            <div style="font-size: 10px; color: #a7f3d0; font-family: var(--font-mono);">Post-Checkout Upsell</div>
+          </div>
+          <div style="background: rgba(255, 60, 0, 0.1); border: 1px solid var(--accent-hot); padding: 10px 14px; border-radius: 4px; flex: 1;">
+            <div style="font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: #f87171;">100%</div>
+            <div style="font-size: 10px; color: #fca5a5; font-family: var(--font-mono);">Data Ownership</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="deck-card" style="border: 1px solid #1f1f28; background: #0d0d12;">
+        <div style="font-family: var(--font-mono); font-size: 10.5px; color: var(--ss-green); margin-bottom: 8px; text-transform: uppercase; font-weight: 700;">
+          The Architecture at a Glance
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px; flex: 1; justify-content: center;">
+          <div style="border: 1px solid var(--ss-pink); background: rgba(217, 82, 158, 0.1); padding: 12px; border-radius: 4px; text-align: center;">
+            <div style="font-weight: 700; font-size: 12px; color: #fbcfe8;">Artist / Fanclub Website (e.g., Weverse, Direct Web)</div>
+            <div style="font-size: 10px; color: var(--ss-pink); font-family: var(--font-mono); margin-top: 2px;">Fan Authentication & Session Token</div>
+          </div>
+          <div style="text-align: center; color: var(--ss-green); font-size: 16px;">⇅</div>
+          <div style="border: 1.5px solid var(--ss-green); background: var(--ss-green-glow); padding: 14px; border-radius: 4px; text-align: center; box-shadow: 0 0 15px rgba(13,148,109,0.15);">
+            <div style="font-weight: 800; font-size: 13px; color: #fff;">SHOW STOP MIDDLEWARE</div>
+            <div style="font-size: 10px; color: #a7f3d0; font-family: var(--font-mono); margin-top: 2px;">
+              Session Auth Gating • Live Seat Stream • Redis Atomic Locks • SafeTix™ SDK
+            </div>
+          </div>
+          <div style="text-align: center; color: var(--ss-green); font-size: 16px;">⇅</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div style="border: 1px solid #272732; background: #141418; padding: 10px; border-radius: 4px; text-align: center; font-size: 10.5px; font-family: var(--font-mono);">
+              Ticketmaster Partner API
+            </div>
+            <div style="border: 1px solid #272732; background: #141418; padding: 10px; border-radius: 4px; text-align: center; font-size: 10.5px; font-family: var(--font-mono);">
+              AXS / Primary APIs
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 4: THE PROBLEM (EXACT FIGMA 1A -> 1B -> 1C WITH FLOW ARROWS) -->
+  <div class="slide" id="slide-4">
+    <div class="watermark-bg">SHOW STOP</div>
+    <div class="slide-header">
+      <div class="slide-step-badge" style="color: var(--accent-hot);">The Problem</div>
+      <h1 class="slide-title">The Broken Status Quo: Fragmented Multi-Platform Funnel </h1>
+    </div>
+
+    <div class="problem-wireframes" style="display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 6px; align-items: stretch;">
+      
+      <!-- EXACT FRAME 1A -->
+      <div class="wireframe-screen">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff; border-bottom: 1px solid var(--border);">
+          <span class="font-mono-display" style="font-size: 10.5px; font-weight: 600; color: var(--ink);">Weverse Notice (Link Farm)</span>
+        </div>
+        <div style="background: rgb(240, 240, 236); border-bottom: 1px solid var(--border); padding: 4px 8px; display: flex; align-items: center; gap: 6px;">
+          <div style="display: flex; gap: 4px;">
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
+          </div>
+          <div class="font-mono-display" style="flex: 1; background: #fff; border: 1px solid var(--border); padding: 1px 6px; font-size: 8.5px; color: var(--ink-muted); border-radius: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">weverse.io/bts/notice/10948</div>
+        </div>
+        <div style="border-bottom: 1px solid var(--border); background: #fff; padding: 0 10px; display: flex; align-items: center; font-size: 9px;">
+          <span class="font-mono-display" style="font-weight: 700; margin-right: 8px; padding: 5px 0;">Weverse</span>
+          <span class="font-mono-display" style="padding: 5px 5px; color: var(--ink-muted);">Feed</span>
+          <span class="font-mono-display" style="padding: 5px 5px; color: var(--ink-muted);">Artist</span>
+          <span class="font-mono-display" style="padding: 5px 5px; color: var(--ink-muted);">LIVE</span>
+          <span class="font-mono-display" style="padding: 5px 5px; border-bottom: 2px solid var(--ink); font-weight: 600; color: var(--ink);">Notice</span>
+        </div>
+        <div style="padding: 8px 10px; flex: 1; background: #fff;">
+          <div class="font-mono-display" style="font-size: 8px; color: var(--ink-muted); margin-bottom: 2px;">◀ Back to Notices</div>
+          <div style="font-size: 10px; font-weight: 700; margin-bottom: 2px;">[NOTICE] BTS WORLD TOUR 'ARIRANG' Information</div>
+          <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted); margin-bottom: 6px;">Date: 2026.08.15 | HYBE Official</div>
+          
+          <div style="border: 1px solid var(--accent-hot); background: rgb(255, 248, 245); padding: 6px 8px; border-radius: 1px; margin-bottom: 6px;">
+            <div class="font-mono-display" style="font-size: 7.5px; font-weight: 700; color: var(--accent-hot); margin-bottom: 2px;">⚠ CRITICAL PRESALE INSTRUCTIONS</div>
+            <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink); margin-bottom: 1px;">1. Active BTS GLOBAL ARMY MEMBERSHIP required.</div>
+            <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink);">2. Ticketmaster email MUST MATCH Weverse login!</div>
+          </div>
+          <div style="margin-bottom: 6px;">
+            <span class="font-mono-display" style="font-size: 8px; color: var(--ink);">Tour Dates:</span>
+            <div style="margin-top: 3px; display: flex; flex-direction: column; gap: 2px;">
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span class="font-mono-display" style="font-size: 8px; color: var(--accent); text-decoration: underline dashed;">Rose Bowl — btsworldtour.com/la</span>
+                <span class="font-mono-display" style="font-size: 6.5px; background: rgb(255, 240, 235); color: var(--accent-hot); border: 1px solid var(--accent-hot); padding: 0 3px;">EXTERNAL ↗</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span class="font-mono-display" style="font-size: 8px; color: var(--accent); text-decoration: underline dashed;">MetLife — ticketmaster.com/bts</span>
+                <span class="font-mono-display" style="font-size: 6.5px; background: rgb(255, 240, 235); color: var(--accent-hot); border: 1px solid var(--accent-hot); padding: 0 3px;">EXTERNAL ↗</span>
+              </div>
+            </div>
+          </div>
+          <div style="background: rgb(255, 240, 235); border: 1px solid var(--accent-hot); padding: 4px 8px; font-size: 8px; font-family: 'JetBrains Mono', monospace; color: var(--accent-hot); border-radius: 1px; display: inline-flex; align-items: center; gap: 4px;">
+            <span>↗</span>Apply for ARMY Presale on Weverse Shop
+          </div>
+        </div>
+        <div style="background: rgb(255, 240, 235); border-left: 3px solid var(--accent-hot); padding: 6px 8px; margin: 4px 8px 8px;">
+          <div class="font-mono-display" style="font-size: 7.5px; font-weight: 700; color: var(--accent-hot);">UX PAIN POINTS</div>
+          <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink);">✕ Wall-of-text causes confusion; 20%+ email mismatch support tickets</div>
+        </div>
+      </div>
+
+      <!-- Arrow 1A -> 1B -->
+      <div class="flow-arrow-col">
+        <span class="flow-badge" style="background: var(--accent-hot);">REDIRECT 1</span>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+          <path d="M5 12H19M19 12L13 6M19 12L13 18" stroke="#ff3c00" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- EXACT FRAME 1B -->
+      <div class="wireframe-screen">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff; border-bottom: 1px solid var(--border);">
+          <span class="font-mono-display" style="font-size: 10.5px; font-weight: 600; color: var(--ink);">External Presale Registration</span>
+        </div>
+        <div style="background: rgb(240, 240, 236); border-bottom: 1px solid var(--border); padding: 4px 8px; display: flex; align-items: center; gap: 6px;">
+          <div style="display: flex; gap: 4px;">
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
+          </div>
+          <div class="font-mono-display" style="flex: 1; background: #fff; border: 1px solid var(--border); padding: 1px 6px; font-size: 8.5px; color: var(--ink-muted); border-radius: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">weverseshop.io/en/bts/events/presale-apply</div>
+        </div>
+        <div style="background: rgb(245, 245, 239); border-bottom: 1px solid var(--border); padding: 4px 10px;">
+          <span class="font-mono-display" style="font-size: 8px; color: var(--ink-muted);">[Weverse Shop App / External Window]</span>
+        </div>
+        <div style="padding: 8px 10px; flex: 1; background: #fff;">
+          <div style="font-size: 9.5px; font-weight: 700; margin-bottom: 6px;">BTS GLOBAL OFFICIAL FANCLUB PRESALE</div>
+          <div style="border: 1px solid var(--border); background: rgb(250, 250, 248); padding: 6px 8px; border-radius: 1px; margin-bottom: 6px;">
+            <span class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted);">Step 1: Check Membership Status</span>
+            <div class="font-mono-display" style="margin-top: 3px; font-size: 8.5px; color: var(--success); background: rgb(232, 255, 244); border: 1px solid var(--success); padding: 3px 6px; border-radius: 1px;">✅ Verified: Regular Membership Tier</div>
+          </div>
+          <div style="border: 1px solid var(--accent-hot); background: rgb(255, 248, 245); padding: 6px 8px; border-radius: 1px; margin-bottom: 6px;">
+            <span class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted);">Step 2: Enter Ticket Vendor Details</span>
+            <div style="margin-top: 3px;">
+              <span class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted);">Enter Ticketmaster Account Email:</span>
+              <div style="border: 1px solid var(--accent-hot); background: #fff; padding: 4px 6px; font-size: 8px; font-family: 'JetBrains Mono', monospace; color: var(--ink-muted); margin-top: 2px;">fan_personal_email@gmail.com</div>
+              <div class="font-mono-display" style="font-size: 7.5px; color: var(--accent-hot); margin-top: 2px;">⚠ Must match Weverse login (fan_weverse@icloud.com)</div>
+            </div>
+          </div>
+          <div style="background: rgb(240, 240, 236); border: 1px solid var(--border); padding: 4px 8px; font-size: 8.5px; font-family: 'JetBrains Mono', monospace; color: var(--ink); border-radius: 1px; text-align: center;">Submit Presale Application</div>
+        </div>
+        <div style="background: rgb(255, 240, 235); border-left: 3px solid var(--accent-hot); padding: 6px 8px; margin: 4px 8px 8px;">
+          <div class="font-mono-display" style="font-size: 7.5px; font-weight: 700; color: var(--accent-hot);">UX PAIN POINTS</div>
+          <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink);">✕ Manual entry creates drop-off; codes vulnerable to broker leaks</div>
+        </div>
+      </div>
+
+      <!-- Arrow 1B -> 1C -->
+      <div class="flow-arrow-col">
+        <span class="flow-badge" style="background: var(--accent-hot);">REDIRECT 2</span>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+          <path d="M5 12H19M19 12L13 6M19 12L13 18" stroke="#ff3c00" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- EXACT FRAME 1C -->
+      <div class="wireframe-screen">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff; border-bottom: 1px solid var(--border);">
+          <span class="font-mono-display" style="font-size: 10.5px; font-weight: 600; color: var(--ink);">Ticketmaster Account Collision</span>
+        </div>
+        <div style="background: rgb(240, 240, 236); border-bottom: 1px solid var(--border); padding: 4px 8px; display: flex; align-items: center; gap: 6px;">
+          <div style="display: flex; gap: 4px;">
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
+          </div>
+          <div class="font-mono-display" style="flex: 1; background: #fff; border: 1px solid var(--border); padding: 1px 6px; font-size: 8.5px; color: var(--ink-muted); border-radius: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">ticketmaster.com/bts-metlife/event/12345</div>
+        </div>
+        <div style="background: rgb(0, 72, 153); padding: 5px 10px; display: flex; align-items: center; justify-content: space-between;">
+          <span class="font-mono-display" style="font-size: 10px; font-weight: 700; color: #fff;">ticketmaster</span>
+          <span class="font-mono-display" style="font-size: 8px; color: rgba(255, 255, 255, 0.75);">Sign In</span>
+        </div>
+        <div style="padding: 8px 10px; flex: 1; background: #fff;">
+          <div style="font-size: 9.5px; font-weight: 700; margin-bottom: 6px;">BTS WORLD TOUR — MetLife Stadium</div>
+          <div style="border: 1px solid var(--accent-hot); background: rgb(255, 240, 235); padding: 6px 8px; border-radius: 1px; margin-bottom: 6px;">
+            <div class="font-mono-display" style="font-size: 8px; font-weight: 700; margin-bottom: 3px;">🔒 ARMY PRESALE LOCKED</div>
+            <span class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted);">Enter your 8-digit unique code:</span>
+            <div style="display: flex; gap: 4px; margin: 3px 0;">
+              <div class="font-mono-display" style="flex: 1; border: 1px solid var(--border); background: #fff; padding: 3px; font-size: 9px; letter-spacing: 0.15em; text-align: center; color: var(--ink-muted);">X X X X - X X X X</div>
+              <div style="background: rgb(240, 240, 236); border: 1px solid var(--border); padding: 3px 6px; font-size: 8px; font-family: 'JetBrains Mono', monospace; border-radius: 1px;">Unlock</div>
+            </div>
+            <div class="font-mono-display" style="font-size: 7.5px; color: #fff; background: var(--accent-hot); padding: 4px 6px; border-radius: 1px;">
+              <span>❌</span> "This passcode is not associated with this TM account."
+            </div>
+          </div>
+          <div style="border: 1px dashed var(--border); background: rgb(245, 245, 245); height: 42px; display: flex; align-items: center; justify-content: center; opacity: 0.6;">
+            <span class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted);">[ Interactive Seat Map — Locked / Grayed Out ]</span>
+          </div>
+        </div>
+        <div style="background: rgb(255, 240, 235); border-left: 3px solid var(--accent-hot); padding: 6px 8px; margin: 4px 8px 8px;">
+          <div class="font-mono-display" style="font-size: 7.5px; font-weight: 700; color: var(--accent-hot);">UX PAIN POINTS</div>
+          <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink);">✕ Fans lose seats from authentication errors; Baymard: ~70% drop-off</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PAGE 5: SHOW STOP WORKFLOW PART 1 (EXACT FIGMA 2A -> 2B WITH FLOW ARROW) -->
+  <div class="slide" id="slide-5">
+    <div class="watermark-bg">SHOW STOP</div>
+    <div class="slide-header">
+      <div class="slide-step-badge" style="color: var(--success);">The Solution (Part 1)</div>
+      <h1 class="slide-title">1-Click Verification & Real-Time In-Platform Seat Map</h1>
+    </div>
+
+    <div class="solution-wireframes" style="display: grid; grid-template-columns: 1fr auto 1.25fr; gap: 8px; align-items: stretch;">
+      
+      <!-- EXACT FRAME 2A -->
+      <div class="wireframe-screen">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff; border-bottom: 1px solid var(--border);">
+          <span class="font-mono-display" style="font-size: 11px; font-weight: 600; color: var(--ink);">Weverse Tour Notice — 1-Click Instant RSVP</span>
+        </div>
+        <div style="background: rgb(26, 26, 26); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 4px 8px; display: flex; align-items: center; gap: 6px;">
+          <div style="display: flex; gap: 4px;">
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
+          </div>
+          <div class="font-mono-display" style="flex: 1; background: rgb(10, 10, 10); border: 1px solid rgba(255, 255, 255, 0.15); padding: 1px 6px; font-size: 8.5px; color: rgba(255, 255, 255, 0.6); border-radius: 1px; display: flex; align-items: center; gap: 4px;">
+            <span style="color: var(--success);">🔒</span>weverse.io/bts/notice/20491
+          </div>
+        </div>
+        <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); background: rgb(10, 10, 10); padding: 0 10px; display: flex; align-items: center; font-size: 9px;">
+          <span class="font-mono-display" style="font-weight: 700; color: #fff; margin-right: 10px; padding: 6px 0;">Weverse</span>
+          <span class="font-mono-display" style="padding: 6px 6px; color: rgba(255, 255, 255, 0.5);">Feed</span>
+          <span class="font-mono-display" style="padding: 6px 6px; color: rgba(255, 255, 255, 0.5);">Artist</span>
+          <span class="font-mono-display" style="padding: 6px 6px; color: rgba(255, 255, 255, 0.5);">LIVE</span>
+          <span class="font-mono-display" style="padding: 6px 6px; border-bottom: 2px solid #fff; font-weight: 600; color: #fff;">Notice</span>
+        </div>
+        <div style="padding: 10px 12px; flex: 1; background: #fff;">
+          <div class="font-mono-display" style="font-size: 8.5px; color: var(--ink-muted); margin-bottom: 3px;">◀ Back to Notices</div>
+          <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">[NOTICE] BTS WORLD TOUR 'ARIRANG' Official Presale & Ticket Release</div>
+          
+          <div style="border: 1.5px solid var(--accent); background: linear-gradient(135deg, rgb(240, 245, 255) 0%, rgb(232, 240, 255) 100%); padding: 8px 10px; border-radius: 2px; margin-bottom: 8px;">
+            <div class="font-mono-display" style="font-size: 8.5px; font-weight: 700; color: var(--accent); margin-bottom: 4px;">🌟 ARMY MEMBERSHIP EXCLUSIVE BENEFIT</div>
+            <div class="font-mono-display" style="font-size: 9px; color: var(--ink); margin-bottom: 2px;">Logged in: <strong>@CaratArmyStay</strong> (ARMY Global Member)</div>
+            <div class="font-mono-display" style="font-size: 9px; color: var(--success); margin-bottom: 6px; display: flex; align-items: center; gap: 4px;">
+              <span>✅</span> Status: Pre-Approved for Day 1 Presale Window
+            </div>
+            <div style="background: var(--accent); color: #fff; padding: 6px 12px; font-size: 9.5px; font-family: 'JetBrains Mono', monospace; font-weight: 600; border-radius: 1px; display: inline-flex; align-items: center; gap: 4px;">
+              🎟 Go to Native Tour Box Office (Tickets Tab)
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 4px 0;">
+            <span class="font-mono-display" style="font-size: 9px;">• New York, NY — MetLife Stadium</span>
+            <span class="font-mono-display" style="font-size: 8px; background: rgb(232, 255, 244); color: var(--success); border: 1px solid var(--success); padding: 1px 5px;">Presale Active →</span>
+          </div>
+        </div>
+        <div style="background: rgb(232, 255, 244); border-left: 3px solid var(--success); padding: 8px 10px; margin: 4px 10px 10px; border-radius: 1px;">
+          <div class="font-mono-display" style="font-size: 8px; font-weight: 700; color: var(--success); margin-bottom: 2px;">SHOW STOP SOLUTION</div>
+          <div class="font-mono-display" style="font-size: 8px; color: var(--ink);">✓ Zero forms & zero codes — Show Stop cross-checks Weverse session on page load</div>
+          <div class="font-mono-display" style="font-size: 8px; color: var(--ink);">✓ Fan stays inside Weverse — no external redirects, zero drop-off at Step 1</div>
+        </div>
+      </div>
+
+      <!-- Flow Connector Arrow -->
+      <div class="flow-arrow-col">
+        <span class="flow-badge" style="background: var(--success);">IN-APP STREAM</span>
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+          <path d="M5 12H19M19 12L13 6M19 12L13 18" stroke="#0D946D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- EXACT FRAME 2B -->
+      <div class="wireframe-screen">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff; border-bottom: 1px solid var(--border);">
+          <span class="font-mono-display" style="font-size: 11px; font-weight: 600; color: var(--ink);">New Weverse "Tickets" Tab — Real-Time Seat Selection</span>
+        </div>
+        <div style="background: rgb(26, 26, 26); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 4px 8px; display: flex; align-items: center; gap: 6px;">
+          <div style="display: flex; gap: 4px;">
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
+          </div>
+          <div class="font-mono-display" style="flex: 1; background: rgb(10, 10, 10); border: 1px solid rgba(255, 255, 255, 0.15); padding: 1px 6px; font-size: 8.5px; color: rgba(255, 255, 255, 0.6); border-radius: 1px; display: flex; align-items: center; gap: 4px;">
+            <span style="color: var(--success);">🔒</span>weverse.io/bts/tickets
+          </div>
+        </div>
+        <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); background: rgb(10, 10, 10); padding: 0 10px; display: flex; align-items: center; font-size: 9px;">
+          <span class="font-mono-display" style="font-weight: 700; color: #fff; margin-right: 10px; padding: 6px 0;">Weverse</span>
+          <span class="font-mono-display" style="padding: 6px 6px; color: rgba(255, 255, 255, 0.5);">Feed</span>
+          <span class="font-mono-display" style="padding: 6px 6px; color: rgba(255, 255, 255, 0.5);">Notice</span>
+          <span class="font-mono-display" style="padding: 6px 8px; border-bottom: 2px solid var(--accent); font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 4px;">
+            🎟 Tickets <span style="background: var(--accent); color: #fff; font-size: 7px; padding: 1px 4px; border-radius: 2px;">NEW</span>
+          </span>
+        </div>
+        <div style="padding: 6px 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #fff;">
+          <div>
+            <div style="font-size: 10.5px; font-weight: 700;">BTS WORLD TOUR 'ARIRANG' — New York (MetLife Stadium)</div>
+            <div class="font-mono-display" style="font-size: 8.5px; color: var(--success); margin-top: 1px;">Presale Access: 🟢 UNLOCKED (ARMY Regular Tier)</div>
+          </div>
+          <div class="font-mono-display" style="font-size: 8px; color: var(--ink-muted); border: 1px solid var(--border); padding: 2px 6px;">
+            GET /events/:id/availability
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0px; flex: 1; background: #fff;">
+          <!-- SVG Stadium Map -->
+          <div style="border-right: 1px solid var(--border); padding: 8px; display: flex; align-items: center; justify-content: center; background: #f8f8f5;">
+            <svg viewBox="0 0 200 130" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; max-height: 125px;">
+              <rect width="200" height="130" fill="#f8f8f5"></rect>
+              <ellipse cx="100" cy="65" rx="90" ry="55" stroke="#d0d0c8" stroke-width="1" fill="#f0f0ec"></ellipse>
+              <ellipse cx="100" cy="65" rx="65" ry="38" stroke="#c0c0b8" stroke-width="1" fill="#e8e8e2"></ellipse>
+              <ellipse cx="100" cy="65" rx="45" ry="25" stroke="#b0b0a8" stroke-width="1" fill="#dcdcd8"></ellipse>
+              <rect x="78" y="55" width="44" height="20" rx="1" fill="#333" stroke="#0a0a0a" stroke-width="0.5"></rect>
+              <text x="100" y="67" text-anchor="middle" fill="#fff" font-size="6" font-family="JetBrains Mono, monospace">STAGE</text>
+              <rect x="83" y="75" width="14" height="8" rx="0.5" fill="var(--accent)" opacity="0.9"></rect>
+              <text x="90" y="81" text-anchor="middle" fill="#fff" font-size="5" font-family="JetBrains Mono, monospace">FL A1</text>
+              <rect x="93" y="75" width="14" height="8" rx="0.5" fill="#c8c8c0"></rect>
+              <text x="100" y="81" text-anchor="middle" fill="#555" font-size="5" font-family="JetBrains Mono, monospace">FL A2</text>
+              <rect x="110" y="75" width="14" height="8" rx="0.5" fill="#c8c8c0"></rect>
+              <text x="117" y="81" text-anchor="middle" fill="#555" font-size="5" font-family="JetBrains Mono, monospace">FL A3</text>
+              <text x="100" y="108" text-anchor="middle" fill="#999" font-size="6" font-family="JetBrains Mono, monospace">100 LEVEL</text>
+              <rect x="10" y="10" width="8" height="8" fill="var(--accent)" rx="0.5"></rect>
+              <text x="21" y="17" fill="var(--accent)" font-size="6" font-family="JetBrains Mono, monospace">Selected</text>
+            </svg>
+          </div>
+          <!-- Live Sections Column -->
+          <div style="padding: 8px 10px; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <div class="font-mono-display" style="font-size: 8.5px; font-weight: 600; margin-bottom: 6px; color: var(--ink-muted);">Available Sections (Live Inventory)</div>
+              <div style="border: 1px solid var(--accent); background: rgb(240, 245, 255); padding: 5px 8px; margin-bottom: 4px; border-radius: 1px;">
+                <div class="font-mono-display" style="font-size: 8.5px; font-weight: 600;">Section Floor A1 — $450</div>
+                <div class="font-mono-display" style="font-size: 8px; color: var(--accent); margin-top: 1px;">2 Seats Selected [A11, A12]</div>
+              </div>
+              <div style="border: 1px solid var(--border); background: #fff; padding: 5px 8px; margin-bottom: 4px; border-radius: 1px;">
+                <div class="font-mono-display" style="font-size: 8px; font-weight: 400;">Section 102 (Lower Bowl) — $220</div>
+              </div>
+            </div>
+            <div style="background: var(--accent); color: #fff; padding: 6px 10px; font-size: 9.5px; font-family: 'JetBrains Mono', monospace; font-weight: 600; border-radius: 1px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+              🔒 Reserve & Lock Seats (2)
+            </div>
+          </div>
+        </div>
+        <div style="background: rgb(232, 255, 244); border-left: 3px solid var(--success); padding: 8px 10px; margin: 4px 10px 10px; border-radius: 1px;">
+          <div class="font-mono-display" style="font-size: 8px; font-weight: 700; color: var(--success); margin-bottom: 2px;">SHOW STOP SOLUTION</div>
+          <div class="font-mono-display" style="font-size: 8px; color: var(--ink);">✓ Live inventory stream rendered inside Weverse UI via Show Stop middleware</div>
+          <div class="font-mono-display" style="font-size: 8px; color: var(--ink);">✓ "Reserve" triggers Redis atomic lock + Ticketmaster Cart Hold simultaneously</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PAGE 6: SHOW STOP WORKFLOW PART 2 (EXACT FIGMA 2C -> 2D WITH FLOW ARROW) -->
+  <div class="slide" id="slide-6">
+    <div class="watermark-bg">SHOW STOP</div>
+    <div class="slide-header">
+      <div class="slide-step-badge" style="color: var(--success);">The Solution (Part 2)</div>
+      <h1 class="slide-title">In-Platform Checkout & Native SafeTix™ Delivery</h1>
+    </div>
+
+    <div class="solution-wireframes" style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch;">
+      
+      <!-- EXACT FRAME 2C -->
+      <div class="wireframe-screen">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff; border-bottom: 1px solid var(--border);">
+          <span class="font-mono-display" style="font-size: 11px; font-weight: 600; color: var(--ink);">In-Platform Checkout — Cart Hold Timer & Native Payment</span>
+        </div>
+        <div style="background: rgb(26, 26, 26); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 4px 8px; display: flex; align-items: center; gap: 6px;">
+          <div style="display: flex; gap: 4px;">
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
+          </div>
+          <div class="font-mono-display" style="flex: 1; background: rgb(10, 10, 10); border: 1px solid rgba(255, 255, 255, 0.15); padding: 1px 6px; font-size: 8.5px; color: rgba(255, 255, 255, 0.6); border-radius: 1px; display: flex; align-items: center; gap: 4px;">
+            <span style="color: var(--success);">🔒</span>weverse.io/bts/tickets/checkout
+          </div>
+        </div>
+        <div style="background: rgb(10, 10, 10); padding: 6px 12px; display: flex; justify-content: space-between; align-items: center;">
+          <span class="font-mono-display" style="font-size: 11px; font-weight: 700; color: #fff;">Weverse Checkout</span>
+          <div class="font-mono-display" style="font-size: 9.5px; color: var(--warn); background: rgba(255, 149, 0, 0.15); border: 1px solid var(--warn); padding: 2px 8px; border-radius: 1px; display: flex; align-items: center; gap: 4px;">
+            ⏱ Reservation Held: 04:42
+          </div>
+        </div>
+        <div style="padding: 10px 12px; flex: 1; background: #fff;">
+          <div style="font-size: 10.5px; font-weight: 700; margin-bottom: 8px;">Order Summary: BTS WORLD TOUR (MetLife Stadium)</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px;">
+            <div style="border-bottom: 1px solid var(--border); padding-bottom: 3px;">
+              <div class="font-mono-display" style="font-size: 8px; color: var(--ink-muted);">Seats</div>
+              <div class="font-mono-display" style="font-size: 9px; font-weight: 600;">Floor A1, Row A, Seats 11–12</div>
+            </div>
+            <div style="border-bottom: 1px solid var(--border); padding-bottom: 3px;">
+              <div class="font-mono-display" style="font-size: 8px; color: var(--ink-muted);">Fan Account</div>
+              <div class="font-mono-display" style="font-size: 9px; font-weight: 600;">fan@weverse.io (Verified ARMY)</div>
+            </div>
+            <div style="border-bottom: 1px solid var(--border); padding-bottom: 3px;">
+              <div class="font-mono-display" style="font-size: 8px; color: var(--ink-muted);">Total</div>
+              <div class="font-mono-display" style="font-size: 9px; font-weight: 600;">$900.00 USD (incl. taxes & fees)</div>
+            </div>
+            <div style="border-bottom: 1px solid var(--border); padding-bottom: 3px;">
+              <div class="font-mono-display" style="font-size: 8px; color: var(--ink-muted);">Protection</div>
+              <div class="font-mono-display" style="font-size: 9px; font-weight: 600;">Weverse Fan Auth + Show Stop</div>
+            </div>
+          </div>
+          <div class="font-mono-display" style="font-size: 8.5px; margin-bottom: 4px; font-weight: 600;">Payment Method:</div>
+          <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
+            <div class="font-mono-display" style="font-size: 8.5px; padding: 5px 8px; border: 1px solid var(--accent); background: rgb(240, 245, 255); border-radius: 1px; color: var(--accent);">
+              ● Saved Weverse Pay / Apple Pay / Google Pay
+            </div>
+            <div style="border: 1px solid var(--border); background: rgb(250, 250, 248); padding: 5px 8px; border-radius: 1px; display: flex; gap: 6px; align-items: center;">
+              <span class="font-mono-display" style="font-size: 8.5px; color: var(--ink-muted); flex: 2;">4111 •••• •••• 4242</span>
+              <span class="font-mono-display" style="font-size: 8.5px; color: var(--ink-muted); flex: 1;">Exp: 12/28</span>
+              <span class="font-mono-display" style="font-size: 8.5px; color: var(--ink-muted); flex: 1;">CVC: •••</span>
+            </div>
+          </div>
+          <div style="background: var(--accent); color: #fff; padding: 7px 12px; font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: 700; border-radius: 1px; text-align: center;">
+            💳 Complete Purchase & Issue Tickets
+          </div>
+        </div>
+        <div style="background: rgb(232, 255, 244); border-left: 3px solid var(--success); padding: 8px 10px; margin: 4px 10px 10px; border-radius: 1px;">
+          <div class="font-mono-display" style="font-size: 8px; font-weight: 700; color: var(--success); margin-bottom: 2px;">SHOW STOP SOLUTION</div>
+          <div class="font-mono-display" style="font-size: 8px; color: var(--ink);">✓ Show Stop payment proxy handles checkout — single-page conversion, zero drop-off</div>
+          <div class="font-mono-display" style="font-size: 8px; color: var(--ink);">✓ Cart hold timer with atomic lock prevents seat poaching during payment</div>
+        </div>
+      </div>
+
+      <!-- Flow Connector Arrow -->
+      <div class="flow-arrow-col">
+        <span class="flow-badge" style="background: var(--success);">INSTANT ISSUANCE</span>
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+          <path d="M5 12H19M19 12L13 6M19 12L13 18" stroke="#0D946D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- EXACT FRAME 2D -->
+      <div class="wireframe-screen">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff; border-bottom: 1px solid var(--border);">
+          <span class="font-mono-display" style="font-size: 11px; font-weight: 600; color: var(--ink);">Instant SafeTix Delivery — Native Weverse App Wallet</span>
+        </div>
+        <div style="background: rgb(26, 26, 26); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 4px 8px; display: flex; align-items: center; gap: 6px;">
+          <div style="display: flex; gap: 4px;">
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
+          </div>
+          <div class="font-mono-display" style="flex: 1; background: rgb(10, 10, 10); border: 1px solid rgba(255, 255, 255, 0.15); padding: 1px 6px; font-size: 8.5px; color: rgba(255, 255, 255, 0.6); border-radius: 1px; display: flex; align-items: center; gap: 4px;">
+            <span style="color: var(--success);">🔒</span>weverse.io/bts/tickets/my-pass
+          </div>
+        </div>
+        <div style="background: rgb(10, 10, 10); padding: 6px 12px; display: flex; justify-content: space-between; align-items: center;">
+          <span class="font-mono-display" style="font-size: 11px; font-weight: 700; color: #fff;">Weverse</span>
+          <span class="font-mono-display" style="font-size: 8.5px; color: var(--accent); border: 1px solid var(--accent); padding: 2px 8px;">My Wallet</span>
+        </div>
+        <div style="padding: 10px 12px; flex: 1; background: #fff;">
+          <div style="font-size: 10.5px; font-weight: 700; color: var(--success); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+            <span>🎉 ORDER CONFIRMED!</span>
+            <span class="font-mono-display" style="font-size: 8.5px; color: var(--ink-muted); font-weight: 400;">Order ID: #TM-HYBE-892104</span>
+          </div>
+          
+          <div style="border: 1.5px solid var(--ink); border-radius: 2px; overflow: hidden; box-shadow: 2px 2px 0 var(--ink);">
+            <div style="background: var(--panel-dark); padding: 8px 10px; color: #fff;">
+              <div style="font-size: 10px; font-weight: 700; margin-bottom: 2px;">BTS WORLD TOUR 'ARIRANG'</div>
+              <div class="font-mono-display" style="font-size: 8px; color: rgba(255, 255, 255, 0.6);">MetLife Stadium • Oct 14, 2026 • 7:30 PM</div>
+            </div>
+            <div style="border-bottom: 1px dashed var(--border); padding: 5px 10px; display: flex; gap: 16px; background: #fafafa;">
+              <div>
+                <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted);">SEC</div>
+                <div class="font-mono-display" style="font-size: 10px; font-weight: 700;">Floor A1</div>
+              </div>
+              <div>
+                <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted);">ROW</div>
+                <div class="font-mono-display" style="font-size: 10px; font-weight: 700;">A</div>
+              </div>
+              <div>
+                <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted);">SEAT</div>
+                <div class="font-mono-display" style="font-size: 10px; font-weight: 700;">11</div>
+              </div>
+            </div>
+            <div style="padding: 8px 10px; text-align: center; background: #fff;">
+              <div style="border: 1px solid var(--border); padding: 6px 8px; background: rgb(248, 248, 248); margin-bottom: 4px; overflow: hidden; position: relative;">
+                <svg viewBox="0 0 300 40" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: 32px;">
+                  <rect x="0" y="0" width="2" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="5" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="10" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                  <rect x="15" y="0" width="2" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="20" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="25" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                  <rect x="30" y="0" width="2" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="35" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="40" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="45" y="0" width="1" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="50" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                  <rect x="55" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="60" y="0" width="1" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="65" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                  <rect x="70" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="75" y="0" width="1" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="80" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="85" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="90" y="0" width="3" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="95" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="100" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="105" y="0" width="3" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="110" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="115" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="120" y="0" width="2" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="125" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="130" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                  <rect x="135" y="0" width="2" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="140" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="145" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                  <rect x="150" y="0" width="2" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="155" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="160" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="165" y="0" width="1" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="170" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                  <rect x="175" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="180" y="0" width="1" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="185" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                  <rect x="190" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="195" y="0" width="1" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="200" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="205" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="210" y="0" width="3" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="215" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="220" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="225" y="0" width="3" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="230" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="235" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="240" y="0" width="2" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="245" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="250" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                  <rect x="255" y="0" width="2" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="260" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="265" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                  <rect x="270" y="0" width="2" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="275" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                  <rect x="280" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                  <rect x="285" y="0" width="1" height="40" fill="#0047ff" opacity="0.7"></rect>
+                  <rect x="290" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                </svg>
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, rgb(0, 71, 255), rgb(68, 136, 255), rgb(0, 71, 255)); opacity: 0.9;"></div>
+              </div>
+              <div class="font-mono-display" style="font-size: 8px; color: var(--accent); margin-bottom: 4px;">🔵 SafeTix™ Barcode Rotating — Updates every 15s</div>
+              <div style="display: flex; gap: 6px; justify-content: center;">
+                <div class="font-mono-display" style="border: 1px solid var(--border); padding: 3px 8px; font-size: 8px; border-radius: 1px;">📲 Save to Apple / Google Wallet</div>
+                <div class="font-mono-display" style="border: 1px solid var(--accent); color: var(--accent); padding: 3px 8px; font-size: 8px; border-radius: 1px;">🎁 View Exclusive Merch</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="background: rgb(232, 255, 244); border-left: 3px solid var(--success); padding: 8px 10px; margin: 4px 10px 10px; border-radius: 1px;">
+          <div class="font-mono-display" style="font-size: 8px; font-weight: 700; color: var(--success); margin-bottom: 2px;">SHOW STOP SOLUTION</div>
+          <div class="font-mono-display" style="font-size: 8px; color: var(--ink);">✓ Fans never need to download the Ticketmaster app — full ticket lifecycle on Weverse</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PAGE 7: MONETIZATION IMPACT (WITH 60% WIDTH WIREFRAME 2D COPY) -->
+  <div class="slide" id="slide-7">
+    <div class="watermark-bg">SHOW STOP</div>
+    <div class="slide-header">
+      <div class="slide-step-badge" style="color: var(--ss-green);">Proof & Value</div>
+      <h1 class="slide-title">Direct Post-Checkout Monetization Impact</h1>
+    </div>
+
+    <!-- Grid configured with wider left column and narrower right column (~60% effective width) -->
+    <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: stretch; flex: 1;">
+      
+      <!-- Left Column: Upsell Economics & Conversion Data -->
+      <div class="deck-card" style="justify-content: center; gap: 16px;">
+        <h2 style="font-size: 22px; font-weight: 800; color: #fff; line-height: 1.3;">Capturing Peak Fan Buying Intent</h2>
+        <p style="color: #a1a1aa; font-size: 13px; line-height: 1.6;">
+          On third-party ticketing platforms, the moment a fan secures their seat, Ticketmaster serves generic ads (credit cards, parking, other artists). With Show Stop, you own the confirmation screen entirely.
+        </p>
+
+        <div style="border-left: 3px solid var(--ss-green); padding-left: 14px;">
+          <div style="font-family: var(--font-mono); font-size: 17px; font-weight: 700; color: var(--ss-green);">15% to 30% Upsell Conversion Rate</div>
+          <div style="font-size: 12px; color: #a1a1aa; line-height: 1.5; margin-top: 4px;">
+            Standard e-commerce upselling benchmarks show high-intent fans convert immediately on post-sale recommendations when buying intent is at its absolute peak.
+          </div>
+        </div>
+
+        <ul style="list-style: none; font-size: 12.5px; color: #d4d4d8; display: flex; flex-direction: column; gap: 8px;">
+          <li>✓ <strong>Tour Merch Pre-Orders:</strong> Add official tour hoodies & lightsticks directly to order</li>
+          <li>✓ <strong>VIP Upgrades:</strong> Soundcheck access, early entry, and commemorative laminates</li>
+          <li>✓ <strong>Album Bundles:</strong> Digital and vinyl pre-saves attached to entry pass</li>
+        </ul>
+      </div>
+
+      <!-- Right Column: COPY OF WIREFRAME 2D AT ~60% WIDTH (CENTERED) -->
+      <div style="display: flex; justify-content: center; align-items: stretch;">
+        <div class="wireframe-screen monetization-wireframe" style="width: 100%; max-width: 380px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: #fff; border-bottom: 1px solid var(--border);">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="font-mono-display" style="font-size: 11px; font-weight: 600; color: var(--ink);">SafeTix™ Delivery + Merch Upsell</span>
+            </div>
+            <span style="font-family: var(--font-mono); font-size: 8.5px; color: var(--success); font-weight: 700;">UPSELL FLOW</span>
+          </div>
+          <div style="background: rgb(26, 26, 26); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 4px 8px; display: flex; align-items: center; gap:6px;">
+            <div style="display: flex; gap: 4px;">
+              <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
+              <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
+              <div style="width: 7px; height: 7px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
+            </div>
+            <div class="font-mono-display" style="flex: 1; background: rgb(10, 10, 10); border: 1px solid rgba(255, 255, 255, 0.15); padding: 1px 6px; font-size: 8.5px; color: rgba(255, 255, 255, 0.6); border-radius: 1px; display: flex; align-items: center; gap: 4px;">
+              <span style="color: var(--success);">🔒</span>weverse.io/bts/tickets/my-pass
+            </div>
+          </div>
+          <div style="background: rgb(10, 10, 10); padding: 6px 12px; display: flex; justify-content: space-between; align-items: center;">
+            <span class="font-mono-display" style="font-size: 11px; font-weight: 700; color: #fff;">Weverse</span>
+            <span class="font-mono-display" style="font-size: 8.5px; color: var(--accent); border: 1px solid var(--accent); padding: 2px 8px;">My Wallet</span>
+          </div>
+          <div style="padding: 10px 12px; flex: 1; background: #fff; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <div style="font-size: 10.5px; font-weight: 700; color: var(--success); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                <span>🎉 ORDER CONFIRMED!</span>
+                <span class="font-mono-display" style="font-size: 8.5px; color: var(--ink-muted); font-weight: 400;">#TM-HYBE-892104</span>
+              </div>
+              
+              <!-- SafeTix Boarding Pass Ticket Card -->
+              <div style="border: 1.5px solid var(--ink); border-radius: 2px; overflow: hidden; box-shadow: 2px 2px 0 var(--ink); margin-bottom: 6px;">
+                <div style="background: var(--panel-dark); padding: 8px 10px; color: #fff;">
+                  <div style="font-size: 10px; font-weight: 700; margin-bottom: 2px;">BTS WORLD TOUR 'ARIRANG'</div>
+                  <div class="font-mono-display" style="font-size: 8px; color: rgba(255, 255, 255, 0.6);">MetLife Stadium • Oct 14, 2026 • 7:30 PM</div>
+                </div>
+                <div style="border-bottom: 1px dashed var(--border); padding: 5px 10px; display: flex; gap: 16px; background: #fafafa;">
+                  <div>
+                    <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted);">SEC</div>
+                    <div class="font-mono-display" style="font-size: 10px; font-weight: 700;">Floor A1</div>
+                  </div>
+                  <div>
+                    <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted);">ROW</div>
+                    <div class="font-mono-display" style="font-size: 10px; font-weight: 700;">A</div>
+                  </div>
+                  <div>
+                    <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted);">SEAT</div>
+                    <div class="font-mono-display" style="font-size: 10px; font-weight: 700;">11</div>
+                  </div>
+                </div>
+                <div style="padding: 8px 10px; text-align: center; background: #fff;">
+                  <div style="border: 1px solid var(--border); padding: 6px 8px; background: rgb(248, 248, 248); margin-bottom: 4px; overflow: hidden; position: relative;">
+                    <svg viewBox="0 0 300 35" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: 32px;">
+                      <rect x="0" y="0" width="2" height="35" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="6" y="0" width="1" height="35" fill="#0a0a0a"></rect>
+                      <rect x="12" y="0" width="3" height="35" fill="#0a0a0a"></rect>
+                      <rect x="18" y="0" width="2" height="35" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="25" y="0" width="1" height="35" fill="#0a0a0a"></rect>
+                      <rect x="32" y="0" width="3" height="35" fill="#0a0a0a"></rect>
+                      <rect x="40" y="0" width="2" height="35" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="48" y="0" width="1" height="35" fill="#0a0a0a"></rect>
+                      <rect x="56" y="0" width="3" height="35" fill="#0a0a0a"></rect>
+                      <rect x="65" y="0" width="2" height="35" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="74" y="0" width="1" height="35" fill="#0a0a0a"></rect>
+                      <rect x="82" y="0" width="3" height="35" fill="#0a0a0a"></rect>
+                      <rect x="92" y="0" width="2" height="35" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="102" y="0" width="2" height="35" fill="#0a0a0a"></rect>
+                      <rect x="112" y="0" width="3" height="35" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="122" y="0" width="1" height="35" fill="#0a0a0a"></rect>
+                      <rect x="134" y="0" width="3" height="35" fill="#0a0a0a"></rect>
+                      <rect x="146" y="0" width="2" height="35" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="158" y="0" width="1" height="35" fill="#0a0a0a"></rect>
+                      <rect x="170" y="0" width="3" height="35" fill="#0a0a0a"></rect>
+                      <rect x="175" y="0" width="2" height="35" fill="#0a0a0a"></rect>
+                      <rect x="180" y="0" width="1" height="35" fill="#0a0a0a"></rect>
+                      <rect x="185" y="0" width="3" height="35" fill="#0a0a0a"></rect>
+                      <rect x="190" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                      <rect x="195" y="0" width="1" height="40" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="200" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                      <rect x="205" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                      <rect x="210" y="0" width="3" height="40" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="215" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                      <rect x="220" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                      <rect x="225" y="0" width="3" height="40" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="230" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                      <rect x="235" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                      <rect x="240" y="0" width="2" height="40" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="245" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                      <rect x="250" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                      <rect x="255" y="0" width="2" height="40" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="260" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                      <rect x="265" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                      <rect x="270" y="0" width="2" height="40" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="275" y="0" width="1" height="40" fill="#0a0a0a"></rect>
+                      <rect x="280" y="0" width="2" height="40" fill="#0a0a0a"></rect>
+                      <rect x="285" y="0" width="1" height="40" fill="#0047ff" opacity="0.7"></rect>
+                      <rect x="290" y="0" width="3" height="40" fill="#0a0a0a"></rect>
+                    </svg>
+                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, rgb(0, 71, 255), rgb(68, 136, 255), rgb(0, 71, 255)); opacity: 0.9;"></div>
+                  </div>
+                  <div class="font-mono-display" style="font-size: 8px; color: var(--accent);">🔵 SafeTix™ Barcode — Rotating every 15s</div>
+                </div>
+              </div>
+
+              <!-- INTEGRATED UPSELL BOX 1: TOUR MERCH DROP -->
+              <div style="border: 1.5px solid var(--ss-pink); background: rgba(217, 82, 158, 0.08); padding: 6px 8px; border-radius: 2px; margin-bottom: 5px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1px;">
+                  <div style="font-size: 8.5px; font-weight: 800; color: #0a0a0a;">Tour Merch Drop (Members Only)</div>
+                  <span class="font-mono-display" style="font-size: 6.5px; background: var(--ss-pink); color: #fff; padding: 1px 3px; border-radius: 1px; font-weight: 700;">15-30%</span>
+                </div>
+                <div style="font-size: 7.5px; color: #555; margin-bottom: 4px;">BTS Official Zip-Up Hoodie — $85.00</div>
+                <div style="display: flex; gap: 4px;">
+                  <button style="background: var(--ss-pink); color: #fff; border: none; font-size: 7.5px; font-family: 'JetBrains Mono', monospace; padding: 3px 6px; border-radius: 2px; font-weight: 700; cursor: default;">+ 1-Click Attach to Order</button>
+                  <button style="background: transparent; color: #777; border: 1px solid var(--border); font-size: 7.5px; font-family: 'JetBrains Mono', monospace; padding: 3px 6px; border-radius: 2px; cursor: default;">Skip</button>
+                </div>
+              </div>
+
+              <!-- INTEGRATED UPSELL BOX 2: VIP SOUNDCHECK ACCESS -->
+              <div style="border: 1px solid var(--border); background: #fafafa; padding: 5px 8px; border-radius: 2px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <div style="font-size: 8px; font-weight: 700; color: #0a0a0a;">Soundcheck VIP Access Upgrade</div>
+                    <div style="font-size: 7px; color: #666;">Early floor access + laminate — $120.00</div>
+                  </div>
+                  <button style="background: var(--ink); color: #fff; border: none; font-size: 7.5px; font-family: 'JetBrains Mono', monospace; padding: 3px 6px; border-radius: 2px; font-weight: 600; cursor: default;">+ Upgrade</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          <div style="background: rgb(232, 255, 244); border-left: 3px solid var(--success); padding: 4px 8px; margin: 3px 8px 6px; border-radius: 1px;">
+            <div class="font-mono-display" style="font-size: 7.5px; font-weight: 700; color: var(--success);">✓ 100% on-platform retention at peak buyer intent</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PAGE 8: MULTI-VENDOR STANDARDIZATION (WITH 3 COMPARISON WIREFRAMES) -->
+  <div class="slide" id="slide-8">
+    <div class="watermark-bg">SHOW STOP</div>
+    <div class="slide-header">
+      <div class="slide-step-badge">Tour-Wide Standardization</div>
+      <h1 class="slide-title">Unified Experience Across Multi-Vendor Venues</h1>
+    </div>
+
+    <div class="grid-2col" style="margin-bottom: 8px;">
+      <!-- Left Column (Unchanged) -->
+      <div class="deck-card" style="justify-content: center; gap: 12px;">
+        <h2 style="font-size: 19px; font-weight: 800; color: #fff;">One Universal Interface. Any Ticketing Backend.</h2>
+        <p style="color: #a1a1aa; font-size: 12px; line-height: 1.5;">
+          A major tour spans dozens of venues with conflicting ticketing exclusivity contracts. Fans are forced to navigate different vendor account logins across Ticketmaster, AXS, and regional systems.
+        </p>
+
+        <!-- Moved Callout Section -->
+        <div style="border-left: 3px solid var(--ss-pink); padding-left: 10px; margin: 4px 0;">
+          <div style="font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--ss-pink);">+35% Conversion Recovery</div>
+          <div style="font-size: 10.5px; color: #a1a1aa; line-height: 1.4; margin-top: 2px;">
+            Studies show that streamlined on-site native checkout recovers up to 35% in lost conversion value by eliminating third-party redirects and account friction.<sup>[1]</sup>
+          </div>
+        </div>
+
+        <p style="color: #cbd5e1; font-size: 12px; line-height: 1.5;">
+          Show Stop abstracts these disparate backend APIs behind a single, consistent front-end design system embedded into your own site.
+        </p>
+        <div style="background: #141418; border: 1px solid #272732; padding: 10px; border-radius: 4px; font-family: var(--font-mono); font-size: 10.5px;">
+          <div style="color: var(--ss-pink); margin-bottom: 3px;">// Tour Routing Abstraction</div>
+          <div>MetLife Stadium ➔ TM Partner API</div>
+          <div>Crypto.com Arena ➔ AXS Partner API</div>
+          <div>The O2 London ➔ AXS UK API</div>
+        </div>
+      </div>
+
+      <!-- Right Column: 3 Wireframes Comparison (2 Top Side-by-Side, 1 Bottom) -->
+      <div class="deck-card" style="padding: 10px; background: #0d0d12; border: 1px solid #1f1f28; gap: 8px; justify-content: space-between;">
+        
+        <!-- Top Half: 2 Wireframes Side-by-Side -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1;">
+          
+          <!-- Top Left: Ticketmaster Wireframe -->
+          <div class="wireframe-screen wireframe-compact" style="box-shadow: 2px 2px 0 var(--ink);">
+            <div style="display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: #fff; border-bottom: 1px solid var(--border);">
+              <span class="font-mono-display" style="font-size: 8px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">New Ticketmaster "Tickets" Tab — Real-Time Seat Selection</span>
+            </div>
+            <div style="background: rgb(26, 26, 26); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 2px 6px; display: flex; align-items: center; gap: 4px;">
+              <div style="display: flex; gap: 3px;">
+                <div style="width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
+                <div style="width: 5px; height: 5px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
+                <div style="width: 5px; height: 5px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
+              </div>
+              <div class="font-mono-display" style="flex: 1; background: rgb(10, 10, 10); border: 1px solid rgba(255, 255, 255, 0.15); padding: 1px 4px; font-size: 6.5px; color: rgba(255, 255, 255, 0.6); border-radius: 1px; display: flex; align-items: center; gap: 3px;">
+                <span style="color: var(--success);">🔒</span>weverse.io/bts/tickets
+              </div>
+            </div>
+            <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); background: rgb(10, 10, 10); padding: 0 6px; display: flex; align-items: center; font-size: 7px;">
+              <span class="font-mono-display" style="font-weight: 700; color: #fff; margin-right: 6px; padding: 3px 0;">Weverse</span>
+              <span class="font-mono-display" style="padding: 3px 4px; color: rgba(255, 255, 255, 0.5);">Feed</span>
+              <span class="font-mono-display" style="padding: 3px 4px; color: rgba(255, 255, 255, 0.5);">Notice</span>
+              <span class="font-mono-display" style="padding: 3px 4px; border-bottom: 1.5px solid var(--accent); font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 2px;">
+                🎟 Tickets <span style="background: var(--accent); color: #fff; font-size: 5px; padding: 0 2px; border-radius: 1px;">NEW</span>
+              </span>
+            </div>
+            <div style="padding: 3px 6px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #fff;">
+              <div>
+                <div style="font-size: 7.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;">BTS — MetLife Stadium</div>
+                <div class="font-mono-display" style="font-size: 6px; color: var(--success);">Backend: TM Partner API</div>
+              </div>
+              <div class="font-mono-display" style="font-size: 6px; color: var(--ink-muted); border: 1px solid var(--border); padding: 1px 3px;">
+                GET /availability
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0px; flex: 1; background: #fff;">
+              <div style="border-right: 1px solid var(--border); padding: 4px; display: flex; align-items: center; justify-content: center; background: #f8f8f5;">
+                <svg viewBox="0 0 200 130" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; max-height: 55px;">
+                  <rect width="200" height="130" fill="#f8f8f5"></rect>
+                  <ellipse cx="100" cy="65" rx="90" ry="55" stroke="#d0d0c8" stroke-width="1" fill="#f0f0ec"></ellipse>
+                  <ellipse cx="100" cy="65" rx="65" ry="38" stroke="#c0c0b8" stroke-width="1" fill="#e8e8e2"></ellipse>
+                  <ellipse cx="100" cy="65" rx="45" ry="25" stroke="#b0b0a8" stroke-width="1" fill="#dcdcd8"></ellipse>
+                  <rect x="78" y="55" width="44" height="20" rx="1" fill="#333" stroke="#0a0a0a" stroke-width="0.5"></rect>
+                  <text x="100" y="67" text-anchor="middle" fill="#fff" font-size="6" font-family="JetBrains Mono, monospace">STAGE</text>
+                  <rect x="83" y="75" width="14" height="8" rx="0.5" fill="var(--accent)" opacity="0.9"></rect>
+                  <text x="90" y="81" text-anchor="middle" fill="#fff" font-size="5" font-family="JetBrains Mono, monospace">FL A1</text>
+                  <rect x="93" y="75" width="14" height="8" rx="0.5" fill="#c8c8c0"></rect>
+                  <text x="100" y="81" text-anchor="middle" fill="#555" font-size="5" font-family="JetBrains Mono, monospace">FL A2</text>
+                </svg>
+              </div>
+              <div style="padding: 4px 6px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <div class="font-mono-display" style="font-size: 6.5px; font-weight: 600; color: var(--ink-muted); margin-bottom: 2px;">TM Live Stream</div>
+                  <div style="border: 1px solid var(--accent); background: rgb(240, 245, 255); padding: 2px 4px; border-radius: 1px;">
+                    <div class="font-mono-display" style="font-size: 6.5px; font-weight: 600;">Floor A1 — $450</div>
+                  </div>
+                </div>
+                <div style="background: var(--accent); color: #fff; padding: 3px 4px; font-size: 6.5px; font-family: 'JetBrains Mono', monospace; font-weight: 600; border-radius: 1px; text-align: center;">
+                  🔒 Reserve & Lock
+                </div>
+              </div>
+            </div>
+            <div style="background: rgb(232, 255, 244); border-left: 2px solid var(--success); padding: 3px 6px; margin: 2px 4px 4px; border-radius: 1px;">
+              <div class="font-mono-display" style="font-size: 6px; font-weight: 700; color: var(--success);">Ticketmaster API Connected</div>
+            </div>
+          </div>
+
+          <!-- Top Right: AXS Wireframe -->
+          <div class="wireframe-screen wireframe-compact" style="box-shadow: 2px 2px 0 var(--ink);">
+            <div style="display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: #fff; border-bottom: 1px solid var(--border);">
+              <span class="font-mono-display" style="font-size: 8px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">New AXS "Tickets" Tab — Real-Time Seat Selection</span>
+            </div>
+            <div style="background: rgb(26, 26, 26); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 2px 6px; display: flex; align-items: center; gap: 4px;">
+              <div style="display: flex; gap: 3px;">
+                <div style="width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
+                <div style="width: 5px; height: 5px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
+                <div style="width: 5px; height: 5px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
+              </div>
+              <div class="font-mono-display" style="flex: 1; background: rgb(10, 10, 10); border: 1px solid rgba(255, 255, 255, 0.15); padding: 1px 4px; font-size: 6.5px; color: rgba(255, 255, 255, 0.6); border-radius: 1px; display: flex; align-items: center; gap: 3px;">
+                <span style="color: var(--success);">🔒</span>weverse.io/bts/tickets
+              </div>
+            </div>
+            <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); background: rgb(10, 10, 10); padding: 0 6px; display: flex; align-items: center; font-size: 7px;">
+              <span class="font-mono-display" style="font-weight: 700; color: #fff; margin-right: 6px; padding: 3px 0;">Weverse</span>
+              <span class="font-mono-display" style="padding: 3px 4px; color: rgba(255, 255, 255, 0.5);">Feed</span>
+              <span class="font-mono-display" style="padding: 3px 4px; color: rgba(255, 255, 255, 0.5);">Notice</span>
+              <span class="font-mono-display" style="padding: 3px 4px; border-bottom: 1.5px solid var(--accent); font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 2px;">
+                🎟 Tickets <span style="background: var(--accent); color: #fff; font-size: 5px; padding: 0 2px; border-radius: 1px;">NEW</span>
+              </span>
+            </div>
+            <div style="padding: 3px 6px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #fff;">
+              <div>
+                <div style="font-size: 7.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;">BTS — Crypto.com Arena</div>
+                <div class="font-mono-display" style="font-size: 6px; color: var(--success);">Backend: AXS Partner API</div>
+              </div>
+              <div class="font-mono-display" style="font-size: 6px; color: var(--ink-muted); border: 1px solid var(--border); padding: 1px 3px;">
+                GET /availability
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0px; flex: 1; background: #fff;">
+              <div style="border-right: 1px solid var(--border); padding: 4px; display: flex; align-items: center; justify-content: center; background: #f8f8f5;">
+                <svg viewBox="0 0 200 130" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; max-height: 55px;">
+                  <rect width="200" height="130" fill="#f8f8f5"></rect>
+                  <ellipse cx="100" cy="65" rx="90" ry="55" stroke="#d0d0c8" stroke-width="1" fill="#f0f0ec"></ellipse>
+                  <ellipse cx="100" cy="65" rx="65" ry="38" stroke="#c0c0b8" stroke-width="1" fill="#e8e8e2"></ellipse>
+                  <ellipse cx="100" cy="65" rx="45" ry="25" stroke="#b0b0a8" stroke-width="1" fill="#dcdcd8"></ellipse>
+                  <rect x="78" y="55" width="44" height="20" rx="1" fill="#333" stroke="#0a0a0a" stroke-width="0.5"></rect>
+                  <text x="100" y="67" text-anchor="middle" fill="#fff" font-size="6" font-family="JetBrains Mono, monospace">STAGE</text>
+                  <rect x="83" y="75" width="14" height="8" rx="0.5" fill="var(--accent)" opacity="0.9"></rect>
+                  <text x="90" y="81" text-anchor="middle" fill="#fff" font-size="5" font-family="JetBrains Mono, monospace">FL A1</text>
+                  <rect x="93" y="75" width="14" height="8" rx="0.5" fill="#c8c8c0"></rect>
+                  <text x="100" y="81" text-anchor="middle" fill="#555" font-size="5" font-family="JetBrains Mono, monospace">FL A2</text>
+                </svg>
+              </div>
+              <div style="padding: 4px 6px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <div class="font-mono-display" style="font-size: 6.5px; font-weight: 600; color: var(--ink-muted); margin-bottom: 2px;">AXS Live Stream</div>
+                  <div style="border: 1px solid var(--accent); background: rgb(240, 245, 255); padding: 2px 4px; border-radius: 1px;">
+                    <div class="font-mono-display" style="font-size: 6.5px; font-weight: 600;">Floor A1 — $450</div>
+                  </div>
+                </div>
+                <div style="background: var(--accent); color: #fff; padding: 3px 4px; font-size: 6.5px; font-family: 'JetBrains Mono', monospace; font-weight: 600; border-radius: 1px; text-align: center;">
+                  🔒 Reserve & Lock
+                </div>
+              </div>
+            </div>
+            <div style="background: rgb(232, 255, 244); border-left: 2px solid var(--success); padding: 3px 6px; margin: 2px 4px 4px; border-radius: 1px;">
+              <div class="font-mono-display" style="font-size: 6px; font-weight: 700; color: var(--success);">AXS API Connected</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Bottom Half: 1 Wireframe Identical to Page 5 Frame 2B -->
+        <div style="flex: 1; display: flex;">
+          <div class="wireframe-screen" style="width: 100%;">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 4px 10px; background: #fff; border-bottom: 1px solid var(--border);">
+              <span class="font-mono-display" style="font-size: 10px; font-weight: 600; color: var(--ink);">New Weverse "Tickets" Tab — Real-Time Seat Selection</span>
+            </div>
+            <div style="background: rgb(26, 26, 26); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 3px 8px; display: flex; align-items: center; gap: 6px;">
+              <div style="display: flex; gap: 4px;">
+                <div style="width: 6px; height: 6px; border-radius: 50%; background: rgb(255, 95, 87);"></div>
+                <div style="width: 6px; height: 6px; border-radius: 50%; background: rgb(254, 188, 46);"></div>
+                <div style="width: 6px; height: 6px; border-radius: 50%; background: rgb(40, 200, 64);"></div>
+              </div>
+              <div class="font-mono-display" style="flex: 1; background: rgb(10, 10, 10); border: 1px solid rgba(255, 255, 255, 0.15); padding: 1px 6px; font-size: 8px; color: rgba(255, 255, 255, 0.6); border-radius: 1px; display: flex; align-items: center; gap: 4px;">
+                <span style="color: var(--success);">🔒</span>weverse.io/bts/tickets
+              </div>
+            </div>
+            <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); background: rgb(10, 10, 10); padding: 0 10px; display: flex; align-items: center; font-size: 8.5px;">
+              <span class="font-mono-display" style="font-weight: 700; color: #fff; margin-right: 10px; padding: 4px 0;">Weverse</span>
+              <span class="font-mono-display" style="padding: 4px 6px; color: rgba(255, 255, 255, 0.5);">Feed</span>
+              <span class="font-mono-display" style="padding: 4px 6px; color: rgba(255, 255, 255, 0.5);">Notice</span>
+              <span class="font-mono-display" style="padding: 4px 8px; border-bottom: 2px solid var(--accent); font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 4px;">
+                🎟 Tickets <span style="background: var(--accent); color: #fff; font-size: 6.5px; padding: 1px 3px; border-radius: 2px;">NEW</span>
+              </span>
+            </div>
+            <div style="padding: 4px 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #fff;">
+              <div>
+                <div style="font-size: 9.5px; font-weight: 700;">BTS WORLD TOUR 'ARIRANG' — New York (MetLife Stadium)</div>
+                <div class="font-mono-display" style="font-size: 7.5px; color: var(--success); margin-top: 1px;">Presale Access: 🟢 UNLOCKED (ARMY Regular Tier)</div>
+              </div>
+              <div class="font-mono-display" style="font-size: 7.5px; color: var(--ink-muted); border: 1px solid var(--border); padding: 1px 5px;">
+                GET /events/:id/availability
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0px; flex: 1; background: #fff;">
+              <!-- SVG Stadium Map -->
+              <div style="border-right: 1px solid var(--border); padding: 6px; display: flex; align-items: center; justify-content: center; background: #f8f8f5;">
+                <svg viewBox="0 0 200 130" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; max-height: 80px;">
+                  <rect width="200" height="130" fill="#f8f8f5"></rect>
+                  <ellipse cx="100" cy="65" rx="90" ry="55" stroke="#d0d0c8" stroke-width="1" fill="#f0f0ec"></ellipse>
+                  <ellipse cx="100" cy="65" rx="65" ry="38" stroke="#c0c0b8" stroke-width="1" fill="#e8e8e2"></ellipse>
+                  <ellipse cx="100" cy="65" rx="45" ry="25" stroke="#b0b0a8" stroke-width="1" fill="#dcdcd8"></ellipse>
+                  <rect x="78" y="55" width="44" height="20" rx="1" fill="#333" stroke="#0a0a0a" stroke-width="0.5"></rect>
+                  <text x="100" y="67" text-anchor="middle" fill="#fff" font-size="6" font-family="JetBrains Mono, monospace">STAGE</text>
+                  <rect x="83" y="75" width="14" height="8" rx="0.5" fill="var(--accent)" opacity="0.9"></rect>
+                  <text x="90" y="81" text-anchor="middle" fill="#fff" font-size="5" font-family="JetBrains Mono, monospace">FL A1</text>
+                  <rect x="93" y="75" width="14" height="8" rx="0.5" fill="#c8c8c0"></rect>
+                  <text x="100" y="81" text-anchor="middle" fill="#555" font-size="5" font-family="JetBrains Mono, monospace">FL A2</text>
+                  <rect x="110" y="75" width="14" height="8" rx="0.5" fill="#c8c8c0"></rect>
+                  <text x="117" y="81" text-anchor="middle" fill="#555" font-size="5" font-family="JetBrains Mono, monospace">FL A3</text>
+                  <text x="100" y="108" text-anchor="middle" fill="#999" font-size="6" font-family="JetBrains Mono, monospace">100 LEVEL</text>
+                  <rect x="10" y="10" width="8" height="8" fill="var(--accent)" rx="0.5"></rect>
+                  <text x="21" y="17" fill="var(--accent)" font-size="6" font-family="JetBrains Mono, monospace">Selected</text>
+                </svg>
+              </div>
+              <!-- Live Sections Column -->
+              <div style="padding: 6px 8px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <div class="font-mono-display" style="font-size: 7.5px; font-weight: 600; margin-bottom: 4px; color: var(--ink-muted);">Available Sections (Live Inventory)</div>
+                  <div style="border: 1px solid var(--accent); background: rgb(240, 245, 255); padding: 4px 6px; margin-bottom: 3px; border-radius: 1px;">
+                    <div class="font-mono-display" style="font-size: 7.5px; font-weight: 600;">Section Floor A1 — $450</div>
+                    <div class="font-mono-display" style="font-size: 7px; color: var(--accent); margin-top: 1px;">2 Seats Selected [A11, A12]</div>
+                  </div>
+                  <div style="border: 1px solid var(--border); background: #fff; padding: 4px 6px; margin-bottom: 3px; border-radius: 1px;">
+                    <div class="font-mono-display" style="font-size: 7px; font-weight: 400;">Section 102 (Lower Bowl) — $220</div>
+                  </div>
+                </div>
+                <div style="background: var(--accent); color: #fff; padding: 5px 8px; font-size: 8.5px; font-family: 'JetBrains Mono', monospace; font-weight: 600; border-radius: 1px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                  🔒 Reserve & Lock Seats (2)
+                </div>
+              </div>
+            </div>
+            <div style="background: rgb(232, 255, 244); border-left: 3px solid var(--success); padding: 5px 8px; margin: 3px 8px 6px; border-radius: 1px;">
+              <div class="font-mono-display" style="font-size: 7px; font-weight: 700; color: var(--success); margin-bottom: 1px;">SHOW STOP SOLUTION</div>
+              <div class="font-mono-display" style="font-size: 7px; color: var(--ink);">✓ Live inventory stream rendered inside Weverse UI via Show Stop middleware</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Footnote at the bottom of Slide 8 -->
+    <div style="border-top: 1px solid #222; padding-top: 6px; font-family: var(--font-mono); font-size: 8.5px; color: #71717a;">
+      [1] Baymard Institute Checkout Optimization Research (aggregating 50+ checkout abandonment studies; documenting ~70% average cart drop-off and potential recovery via frictionless on-site flows).
+    </div>
+  </div>
+
+  <!-- PAGE 9: PARTNERSHIP ROADMAP (WITH DIRECTIONAL FLOW ARROWS) -->
+  <div class="slide" id="slide-9">
+    <div class="watermark-bg">SHOW STOP</div>
+    <div class="slide-header">
+      <div class="slide-step-badge">Partnership Roadmap</div>
+      <h1 class="slide-title">Early Technology Partner Integration</h1>
+    </div>
+
+    <!-- Vertically & Horizontally Centered Content Box with Connected Workflow Arrows -->
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%;">
+      <div style="display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 8px; align-items: center; width: 100%; max-width: 1040px;">
+        
+        <!-- Workflow Card 1 -->
+        <div class="deck-card" style="padding: 16px; justify-content: space-between; height: 180px; background: #0d0d12; border: 1px solid var(--border-highlight);">
+          <div>
+            <div style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--ss-pink); margin-bottom: 6px;">01 / PILOT SELECTION</div>
+            <h3 style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 6px;">Select Fan Meeting or Tour</h3>
+            <p style="font-size: 11px; color: #a1a1aa; line-height: 1.45;">
+              Choose an upcoming tour run, single stadium date, or fanclub presale event for sandbox deployment.
+            </p>
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 10.5px; color: var(--ss-green); font-weight: 700; border-top: 1px solid #222; padding-top: 8px;">
+            ✓ Free pilot through Dec 2026
+          </div>
+        </div>
+
+        <!-- Workflow Arrow 1 -> 2 -->
+        <div class="flow-arrow-col">
+          <span class="flow-badge" style="background: var(--ss-pink); font-size: 7.5px;">STAGE 1</span>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path d="M5 12H19M19 12L13 6M19 12L13 18" stroke="#D9529E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <!-- Workflow Card 2 -->
+        <div class="deck-card" style="padding: 16px; justify-content: space-between; height: 180px; background: #0d0d12; border: 1px solid var(--border-highlight);">
+          <div>
+            <div style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--ss-pink); margin-bottom: 6px;">02 / WHITE-GLOVE INTEGRATION</div>
+            <h3 style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 6px;">Direct API & Auth Hookup</h3>
+            <p style="font-size: 11px; color: #a1a1aa; line-height: 1.45;">
+              Our engineering team configures the middleware, verifies membership OAuth endpoints, and performs load testing.
+            </p>
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 10.5px; color: var(--ss-green); font-weight: 700; border-top: 1px solid #222; padding-top: 8px;">
+            ✓ Direct engineering access
+          </div>
+        </div>
+
+        <!-- Workflow Arrow 2 -> 3 -->
+        <div class="flow-arrow-col">
+          <span class="flow-badge" style="background: var(--ss-green); font-size: 7.5px;">STAGE 2</span>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path d="M5 12H19M19 12L13 6M19 12L13 18" stroke="#0D946D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <!-- Workflow Card 3 -->
+        <div class="deck-card" style="padding: 16px; justify-content: space-between; height: 180px; background: #0d0d12; border: 1px solid var(--border-highlight);">
+          <div>
+            <div style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--ss-pink); margin-bottom: 6px;">03 / FULL REVENUE CAPTURE</div>
+            <h3 style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 6px;">On-Platform Launch</h3>
+            <p style="font-size: 11px; color: #a1a1aa; line-height: 1.45;">
+              Launch presale with 100% on-platform retention, real-time telemetry, and direct post-checkout merch sales.
+            </p>
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 10.5px; color: var(--ss-green); font-weight: 700; border-top: 1px solid #222; padding-top: 8px;">
+            ✓ Preferred 12-month pricing
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 10: CALL TO ACTION -->
+  <div class="slide" id="slide-10">
+    <div class="watermark-bg">SHOW STOP</div>
+    <div class="slide-header">
+      <div class="slide-step-badge" style="color: var(--ss-pink);">05 // Call to Action</div>
+      <h1 class="slide-title">Join Our Early Technology Partner Beta (Free Through Dec 2026)</h1>
+    </div>
+
+    <div class="grid-2col">
+      <div class="deck-card" style="justify-content: center; gap: 14px;">
+        <h2 style="font-size: 20px; font-weight: 800; color: #fff;">Early Technology Partner Program</h2>
+        <p style="color: #a1a1aa; font-size: 13px; line-height: 1.6;">
+          We are onboarding a select group of event organizers, fan platforms, and label partners to pilot Show Stop prior to General Availability.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-family: var(--font-mono); font-size: 12px;">
+          <div style="color: var(--ss-green); font-weight: 700;">▸ Free Pilot Access Through December 2026 ($0 Platform Fee)</div>
+          <div style="color: #93c5fd;">▸ Direct Engineering Access & White-Glove Support</div>
+          <div style="color: #cbd5e1;">▸ Co-Development of Custom Integration Patterns</div>
+          <div style="color: var(--ss-pink); font-weight: 700;">▸ Preferred Pricing Locked for First 12 Months Post-Launch</div>
+        </div>
+      </div>
+
+      <div class="deck-card" style="align-items: center; justify-content: center; text-align: center; gap: 14px; background: #0d0d12; border: 1px solid var(--border-highlight);">
+        <div style="background: var(--ss-gradient); color: #fff; font-family: var(--font-mono); font-size: 11px; font-weight: 800; padding: 5px 12px; border-radius: 3px; letter-spacing: 0.05em;">
+          NEXT STEP
+        </div>
+        <h3 style="font-size: 20px; font-weight: 800;">Schedule a 20-Min Sandbox Walkthrough</h3>
+        <p style="color: #a1a1aa; font-size: 12.5px; max-width: 320px; line-height: 1.5;">
+          Let’s connect with your digital team next week to preview the live API sandbox for your next tour or fan meeting.
+        </p>
+        <div style="font-family: var(--font-mono); font-size: 13px; color: var(--ss-pink); margin-top: 4px;">
+          joane@showstop.io | <span style="color: var(--ss-green);">www.showstop.io</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let currentSlide = 1;
+  const totalSlides = 10;
+
+  function updateSlide() {
+    for (let i = 1; i <= totalSlides; i++) {
+      const slide = document.getElementById(`slide-${i}`);
+      if (slide) {
+        slide.classList.toggle('active', i === currentSlide);
+      }
+    }
+    document.getElementById('slideNum').textContent = `Slide ${currentSlide} / ${totalSlides}`;
+  }
+
+  function nextSlide() {
+    if (currentSlide < totalSlides) {
+      currentSlide++;
+      updateSlide();
+    }
+  }
+
+  function prevSlide() {
+    if (currentSlide > 1) {
+      currentSlide--;
+      updateSlide();
+    }
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'Space') {
+      nextSlide();
+    } else if (e.key === 'ArrowLeft') {
+      prevSlide();
+    }
+  });
+</script>
+
+</body>
+</html>
