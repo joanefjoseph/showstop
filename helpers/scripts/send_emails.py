@@ -21,9 +21,23 @@ import time
 from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
+from pathlib import Path
+from dotenv import load_dotenv
+# ------------------------- LOAD .env -------------------------
+load_dotenv(Path(__file__).resolve().with_name(".env"))
+def require_env(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if not value:
+        sys.exit(f"Missing {name} in your .env file.")
+    return value
+SENDER_NAME = require_env("SENDER_NAME")
+SENDER_EMAIL = require_env("SENDER_EMAIL")
+COMPANY_NAME = require_env("COMPANY_NAME")
+COMPANY_URL = require_env("COMPANY_URL")          # e.g. www.thenewcompany.com
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")  # falls back to a prompt if empty
+# Link target: add https:// if the URL in .env doesn't include a scheme
+COMPANY_HREF = COMPANY_URL if re.match(r"^https?://", COMPANY_URL, re.I) else f"https://{COMPANY_URL}"
 # ------------------------- CONFIG -------------------------
-SENDER_NAME = "Joane Joseph"
-SENDER_EMAIL = "joane@showstop.io"      # <-- your Private Email address
 SMTP_HOST = "mail.privateemail.com"
 SMTP_PORT = 465                               # SSL. (587 + STARTTLS also works)
 IMAP_HOST = "mail.privateemail.com"
@@ -36,15 +50,16 @@ LOG_PATH = "sent_log.csv"                     # prevents double-sending on re-ru
 MIN_DELAY_SEC = 45                            # random pause between emails
 MAX_DELAY_SEC = 90
 # ----------------------------------------------------------
+# Placeholders: {company} -> company name (bold in HTML), {sender} -> your name
 SUBJECT_TEMPLATE = "Direct-to-fan tour ticketing for {company_name}'s artists"
 INTRO = [
-    "My name is Joane Joseph, Founder and CEO of Show Stop.",
+    "My name is {sender}, Founder and CEO of {company}.",
     "We are building a white-label software platform designed to give artists and "
     "music labels direct control over their tour ticketing experience. Our software "
     "allows your artists to host primary ticket sales directly on their own "
     "websites—connecting natively to primary ticketing APIs like Ticketmaster and AXS.",
     "Instead of losing fans to third-party portals where drop-off is high and "
-    "post-sale revenue is lost, Show Stop enables:",
+    "post-sale revenue is lost, {company} enables:",
 ]
 BULLETS = [
     ("Direct Ecosystem Monetization",
@@ -66,27 +81,43 @@ OUTRO = [
     "Would you be open to a 10-minute introductory call in the next week to see a "
     "brief visual preview?",
 ]
-SIGNATURE = ["Best Regards,", "----", "Joane Joseph", "Founder & CEO | Show Stop"]
+SIGNATURE = [
+    "Best Regards,",
+    "----",
+    "{sender}",
+    "Founder & CEO | {company}",
+]
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+def render(text: str, html_mode: bool) -> str:
+    """Fill in {sender} and {company}. In HTML, the company name is bolded."""
+    if html_mode:
+        text = html.escape(text)
+        return (text.replace("{sender}", html.escape(SENDER_NAME))
+                    .replace("{company}", f"<b>{html.escape(COMPANY_NAME)}</b>"))
+    return text.replace("{sender}", SENDER_NAME).replace("{company}", COMPANY_NAME)
 def build_plain(first_name: str) -> str:
+    r = lambda t: render(t, False)
     parts = [f"Hello {first_name},", ""]
     for p in INTRO:
-        parts += [p, ""]
+        parts += [r(p), ""]
     for title, text in BULLETS:
         parts += [f"• {title}: {text}", ""]
     for p in OUTRO:
         parts += [p, ""]
-    parts += ["", *SIGNATURE]
+    parts += ["", *[r(s) for s in SIGNATURE], COMPANY_URL]
     return "\n".join(parts)
 def build_html(first_name: str) -> str:
+    r = lambda t: render(t, True)
     e = html.escape
     out = [f"<p>Hello {e(first_name)},</p>"]
-    out += [f"<p>{e(p)}</p>" for p in INTRO]
+    out += [f"<p>{r(p)}</p>" for p in INTRO]
     out.append("<ul>")
     out += [f"<li><b>{e(t)}:</b> {e(x)}</li>" for t, x in BULLETS]
     out.append("</ul>")
     out += [f"<p>{e(p)}</p>" for p in OUTRO]
-    out.append("<p>&nbsp;</p><p>" + "<br>".join(e(s) for s in SIGNATURE) + "</p>")
+    sig_lines = [r(s) for s in SIGNATURE]
+    sig_lines.append(f'<a href="{e(COMPANY_HREF, quote=True)}">{e(COMPANY_URL)}</a>')
+    out.append("<p>&nbsp;</p><p>" + "<br>".join(sig_lines) + "</p>")
     return ('<html><body style="font-family:Arial,sans-serif;font-size:14px;'
             'line-height:1.5;color:#222">' + "".join(out) + "</body></html>")
 def build_message(row: dict, to_addr: str) -> EmailMessage:
@@ -168,7 +199,7 @@ def main() -> None:
     # ---------- DRY RUN ----------
     if not args.send and not args.test_to:
         sample = build_message(rows[0], rows[0]["email_address"])
-        print("\n--- DRY RUN: preview of first email ---")
+        print("\n--- DRY RUN: preview of first email (plain-text version) ---")
         print(f"To:      {sample['To']}\nSubject: {sample['Subject']}\n")
         print(build_plain(rows[0]["first_name"]))
         print("\n--- all recipients ---")
@@ -176,7 +207,7 @@ def main() -> None:
             print(f"  {r['email_address']:<40} {SUBJECT_TEMPLATE.format(**r)}")
         print("\nNothing was sent. Use --test-to you@domain.com, then --send.")
         return
-    password = os.environ.get("EMAIL_PASSWORD") or getpass.getpass(f"Password for {SENDER_EMAIL}: ")
+    password = EMAIL_PASSWORD or getpass.getpass(f"Password for {SENDER_EMAIL}: ")
     if args.send and not args.test_to:
         if input(f"Send {len(rows)} real emails? Type 'yes': ").strip().lower() != "yes":
             return
@@ -191,7 +222,7 @@ def main() -> None:
                 if SAVE_TO_SENT_FOLDER:
                     save_to_sent(msg, password)
         except smtplib.SMTPAuthenticationError:
-            sys.exit("Login failed. Check SENDER_EMAIL / password.")
+            sys.exit("Login failed. Check SENDER_EMAIL / EMAIL_PASSWORD in .env.")
         except smtplib.SMTPRecipientsRefused as exc:
             print(f"[{i}/{len(rows)}] REFUSED {to_addr}: {exc}")
             log_result(row["email_address"], "refused", str(exc))
