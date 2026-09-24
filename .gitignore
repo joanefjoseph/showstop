@@ -13,3 +13,7 @@ dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# User data
+sent_log.csv
+people_data.csv

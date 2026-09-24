@@ -445,8 +445,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Scrape a LinkedIn company People page.")
     ap.add_argument("people_url", nargs="?",
                     help="e.g. https://www.linkedin.com/company/acme/people/")
-    ap.add_argument("--out", default="employees.csv", help="CSV output path (appended to)")
-    ap.add_argument("--sqlite", help="Optional SQLite DB path (table: employees)")
+    ap.add_argument("--out", default="people_data.csv", help="CSV output path (appended to)")
+    ap.add_argument("--sqlite", help="Optional SQLite DB path (table: people_data)")
     ap.add_argument("--max-people", type=int, default=100,
                     help="Max NEW profiles to process per run (default 100)")
     ap.add_argument("--skip-emails", action="store_true",
