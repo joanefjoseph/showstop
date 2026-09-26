@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LinkedIn People Scraper</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 1200px; color: #222; }
+    h1 { margin-bottom: .25rem; }
+    h2 { margin-top: 2.5rem; }
+    .panel { background: #f6f7f9; border: 1px solid #dde1e6; border-radius: 8px; padding: 1.25rem; }
+    .form-row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+    input[type=text] { flex: 1 1 500px; padding: .6rem; font-size: 1rem; border: 1px solid #bbb; border-radius: 6px; }
+    input[type=number] { width: 90px; padding: .6rem; font-size: 1rem; border: 1px solid #bbb; border-radius: 6px; }
+    button { padding: .6rem 1.1rem; font-size: 1rem; border: 0; border-radius: 6px; background: #0a66c2; color: #fff; cursor: pointer; }
+    button:disabled { background: #99b8dc; cursor: default; }
+    button.secondary { background: #555; }
+    #log { display: none; margin-top: 1rem; background: #111; color: #cfe; font-family: monospace; font-size: .85rem;
+           height: 220px; overflow-y: auto; padding: .75rem; border-radius: 6px; white-space: pre-wrap; }
+    #message { margin-top: .75rem; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: .95rem; }
+    th, td { border-bottom: 1px solid #e2e2e2; padding: .5rem; text-align: left; vertical-align: top; }
+    th { background: #f0f2f5; position: sticky; top: 0; }
+    td a { color: #0a66c2; }
+    .pagination { margin-top: 1rem; display: flex; gap: .75rem; align-items: center; }
+    .pagination a { text-decoration: none; color: #0a66c2; padding: .3rem .6rem; border: 1px solid #0a66c2; border-radius: 6px; }
+    .pagination span.disabled { color: #999; padding: .3rem .6rem; border: 1px solid #ccc; border-radius: 6px; }
+    .muted { color: #666; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <h1>LinkedIn People Scraper</h1>
+  <p class="muted">Paste a company's LinkedIn People page URL and press Submit to scrape it into <code>all_people.db</code>.</p>
+  <div class="panel">
+    <form id="scrape-form">
+      <div class="form-row">
+        <input type="text" id="url" name="url" placeholder="https://www.linkedin.com/company/acme/people/" required>
+        <label>Max new people:
+          <input type="number" id="max_people" name="max_people" value="100" min="1">
+        </label>
+        <button type="submit" id="submit-btn">Submit</button>
+        <button type="button" id="continue-btn" class="secondary" style="display:none">I've logged in – continue</button>
+      </div>
+    </form>
+    <div id="message"></div>
+    <div id="log"></div>
+  </div>
+  <h2>Saved People <span class="muted">({{ total }} total)</span></h2>
+  {% if rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>Company</th>
+        <th>First name</th>
+        <th>Last name</th>
+        <th>Job title</th>
+        <th>LinkedIn profile</th>
+        <th>Email</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.company_name }}</td>
+        <td>{{ r.first_name or '' }}</td>
+        <td>{{ r.last_name or '' }}</td>
+        <td>{{ r.job_title or '' }}</td>
+        <td><a href="{{ r.linkedin_profile_url }}" target="_blank" rel="noopener">Profile</a></td>
+        <td>{{ r.email or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="pagination">
+    {% if page > 1 %}
+      <a href="{{ url_for('index', page=page-1) }}">&larr; Previous</a>
+    {% else %}
+      <span class="disabled">&larr; Previous</span>
+    {% endif %}
+    <span>Page {{ page }} of {{ pages }}</span>
+    {% if page < pages %}
+      <a href="{{ url_for('index', page=page+1) }}">Next &rarr;</a>
+    {% else %}
+      <span class="disabled">Next &rarr;</span>
+    {% endif %}
+  </div>
+  {% else %}
+    <p class="muted">No rows yet. Run a scrape above to populate the table.</p>
+  {% endif %}
+<script>
+  const form = document.getElementById('scrape-form');
+  const submitBtn = document.getElementById('submit-btn');
+  const continueBtn = document.getElementById('continue-btn');
+  const logEl = document.getElementById('log');
+  const msgEl = document.getElementById('message');
+  let pollTimer = null;
+  // Keep the current table page when refreshing after a scrape.
+  const currentPage = new URLSearchParams(location.search).get('page') || '1';
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    msgEl.textContent = '';
+    const body = new FormData(form);
+    const res = await fetch('/scrape', { method: 'POST', body });
+    const data = await res.json();
+    if (!res.ok) {
+      msgEl.textContent = data.error || 'Could not start scrape.';
+      return;
+    }
+    setRunning(true);
+    logEl.style.display = 'block';
+    logEl.textContent = 'Starting scraper...\n';
+    pollTimer = setInterval(poll, 2000);
+  });
+  continueBtn.addEventListener('click', async () => {
+    await fetch('/continue', { method: 'POST' });
+    continueBtn.style.display = 'none';
+  });
+  async function poll() {
+    const res = await fetch('/status');
+    const data = await res.json();
+    logEl.textContent = data.log.join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+    // Show the "continue" button when the scraper is waiting for the login Enter.
+    const waiting = data.log.some(l => l.includes('Press Enter'));
+    continueBtn.style.display = (data.running && waiting) ? 'inline-block' : 'none';
+    if (!data.running) {
+      clearInterval(pollTimer);
+      setRunning(false);
+      const ok = data.returncode === 0;
+      msgEl.textContent = ok ? 'Scrape finished.' : `Scrape ended with an error (exit code ${data.returncode}).`;
+      // Refresh the table so new rows appear.
+      setTimeout(() => location.href = '/?page=' + currentPage, 1000);
+    }
+  }
+  function setRunning(running) {
+    submitBtn.disabled = running;
+    submitBtn.textContent = running ? 'Scraping...' : 'Submit';
+  }
+  // If a scrape was already running when the page loaded, resume polling.
+  (async () => {
+    const data = await (await fetch('/status')).json();
+    if (data.running) {
+      setRunning(true);
+      logEl.style.display = 'block';
+      pollTimer = setInterval(poll, 2000);
+    }
+  })();
+</script>
+</body>
+</html>

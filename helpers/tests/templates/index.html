@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LinkedIn People Scraper</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 1100px; margin: 40px auto; color: #222; }
+  h1 { font-size: 22px; }
+  .panel { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
+  input[type=text], input[type=number] {
+    padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;
+  }
+  #peopleUrl { width: 500px; }
+  button {
+    padding: 8px 18px; font-size: 14px; border: none; border-radius: 4px;
+    background: #0a66c2; color: white; cursor: pointer;
+  }
+  button:disabled { background: #99b9dd; cursor: not-allowed; }
+  #log {
+    background: #111; color: #0f0; font-family: monospace; font-size: 12px;
+    padding: 10px; height: 200px; overflow-y: auto; border-radius: 6px; margin-top: 15px;
+    white-space: pre-wrap;
+  }
+  table { border-collapse: collapse; width: 100%; margin-top: 15px; }
+  th, td { border: 1px solid #ddd; padding: 6px 10px; font-size: 13px; text-align: left; }
+  th { background: #f5f5f5; }
+  tr:nth-child(even) { background: #fafafa; }
+  a.profile-link { color: #0a66c2; text-decoration: none; }
+  .pagination { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
+  .pagination button { background: #eee; color: #222; }
+  .pagination button:disabled { background: #f5f5f5; color: #aaa; }
+  .status-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px;
+    margin-left: 10px;
+  }
+  .status-running { background: #fff3cd; color: #856404; }
+  .status-finished { background: #d4edda; color: #155724; }
+  .status-error { background: #f8d7da; color: #721c24; }
+  .filter-row { margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<h1>LinkedIn People Scraper</h1>
+<div class="panel">
+  <label for="peopleUrl"><strong>Company People Page URL</strong></label><br><br>
+  <input type="text" id="peopleUrl" placeholder="https://www.linkedin.com/company/acme/people/">
+  <label style="margin-left:15px;">Max new people:
+    <input type="number" id="maxPeople" value="100" min="1" style="width:70px;">
+  </label>
+  <button id="submitBtn" onclick="startScrape()">Submit</button>
+  <span id="statusBadge" class="status-badge" style="display:none;"></span>
+  <div id="log"></div>
+</div>
+<div class="panel">
+  <h2>Saved Employees</h2>
+  <div class="filter-row">
+    <input type="text" id="companyFilter" placeholder="Filter by company name...">
+    <button onclick="currentPage=1; loadPeople();">Filter</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Company</th>
+        <th>First Name</th>
+        <th>Last Name</th>
+        <th>Job Title</th>
+        <th>LinkedIn Profile</th>
+        <th>Email</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+  <div class="pagination">
+    <button id="prevBtn" onclick="prevPage()">&laquo; Prev</button>
+    <span id="pageInfo"></span>
+    <button id="nextBtn" onclick="nextPage()">Next &raquo;</button>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
