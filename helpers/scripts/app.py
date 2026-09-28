@@ -1,14 +1,19 @@
+import csv
+import io
 import math
 import sqlite3
 import subprocess
 import sys
 import threading
 from pathlib import Path
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, url_for
+from linkedin_people_scraper import clean_profile_url, init_sqlite
 BASE = Path(__file__).resolve().parent
 DB_PATH = BASE / "all_people.db"
 SCRAPER = BASE / "linkedin_people_scraper.py"
 PER_PAGE = 25
+CSV_FIELDS = ("first_name", "last_name", "job_title", "email")
+REQUIRED_CSV_FIELDS = ("company_name", "linkedin_profile_url")
 app = Flask(__name__)
 # Single shared scrape job (only one browser session at a time).
 job = {"proc": None, "running": False, "log": [], "returncode": None}
@@ -16,14 +21,27 @@ job_lock = threading.Lock()
 # --------------------------------------------------------------------------- #
 # Database
 # --------------------------------------------------------------------------- #
-def fetch_page(page: int) -> tuple[list[dict], int, int]:
-    """Return (rows, total_rows, clamped_page) for the requested page."""
+def _escape_like(text: str) -> str:
+    """Escape LIKE wildcards so the search is a literal substring match."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+def fetch_page(page: int, company_filter: str = "") -> tuple[list[dict], int, int]:
+    """
+    Return (rows, total_matching_rows, clamped_page) for the requested page,
+    optionally limited to rows whose company_name contains `company_filter`.
+    """
     if not DB_PATH.exists():
         return [], 0, 1
+    where = ""
+    params: list = []
+    if company_filter:
+        where = "WHERE company_name LIKE ? ESCAPE '\\'"
+        params.append(f"%{_escape_like(company_filter)}%")
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     try:
-        total = con.execute("SELECT COUNT(*) FROM employees").fetchone()[0]
+        total = con.execute(
+            f"SELECT COUNT(*) FROM employees {where}", params
+        ).fetchone()[0]
     except sqlite3.OperationalError:  # table not created yet
         con.close()
         return [], 0, 1
@@ -31,12 +49,13 @@ def fetch_page(page: int) -> tuple[list[dict], int, int]:
     page = min(max(1, page), pages)
     offset = (page - 1) * PER_PAGE
     rows = con.execute(
-        """SELECT company_name, first_name, last_name, job_title,
-                  linkedin_profile_url, email
-           FROM employees
-           ORDER BY company_name, last_name, first_name
-           LIMIT ? OFFSET ?""",
-        (PER_PAGE, offset),
+        f"""SELECT company_name, first_name, last_name, job_title,
+                   linkedin_profile_url, email
+            FROM employees
+            {where}
+            ORDER BY company_name, last_name, first_name
+            LIMIT ? OFFSET ?""",
+        [*params, PER_PAGE, offset],
     ).fetchall()
     con.close()
     return [dict(r) for r in rows], total, page
@@ -55,7 +74,8 @@ def _reader(proc: subprocess.Popen) -> None:
 @app.route("/")
 def index():
     page = request.args.get("page", 1, type=int)
-    rows, total, page = fetch_page(page)
+    q = request.args.get("q", "").strip()
+    rows, total, page = fetch_page(page, q)
     pages = max(1, math.ceil(total / PER_PAGE))
     return render_template(
         "index.html",
@@ -63,7 +83,7 @@ def index():
         total=total,
         page=page,
         pages=pages,
-        per_page=PER_PAGE,
+        q=q,
     )
 @app.route("/scrape", methods=["POST"])
 def scrape():
@@ -111,5 +131,108 @@ def continue_scrape():
         proc.stdin.write("\n")
         proc.stdin.flush()
     return jsonify(ok=True)
+# --------------------------------------------------------------------------- #
+# CSV upload / download
+# --------------------------------------------------------------------------- #
+@app.route("/upload_csv", methods=["POST"])
+def upload_csv():
+    file = request.files.get("csv_file")
+    if not file or not file.filename:
+        return jsonify(error="Please choose a CSV file."), 400
+    try:
+        text = file.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return jsonify(error="Could not read the file as UTF-8 text."), 400
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        return jsonify(error="The CSV file appears to be empty."), 400
+    header_map = {h.strip().lower() for h in reader.fieldnames if h}
+    missing = [f for f in REQUIRED_CSV_FIELDS if f not in header_map]
+    if missing:
+        return jsonify(
+            error=f"CSV is missing required column(s): {', '.join(missing)}"
+        ), 400
+    valid_rows = []
+    skipped = 0
+    for raw in reader:
+        values = {k.strip().lower(): (v or "").strip() for k, v in raw.items() if k}
+        company_name = values.get("company_name", "")
+        profile_url = clean_profile_url(values.get("linkedin_profile_url", ""))
+        if not company_name or not profile_url:
+            skipped += 1
+            continue
+        row = {
+            "company_name": company_name,
+            "linkedin_profile_url": profile_url,
+        }
+        for field in CSV_FIELDS:
+            row[field] = values.get(field) or None   # blank/missing -> None
+        valid_rows.append(row)
+    if not valid_rows:
+        return jsonify(
+            error="No valid rows found (each row needs company_name and linkedin_profile_url)."
+        ), 400
+    init_sqlite(DB_PATH)  # make sure the table exists
+    con = sqlite3.connect(DB_PATH)
+    existing_pairs = {
+        (c, u) for c, u in
+        con.execute("SELECT company_name, linkedin_profile_url FROM employees")
+    }
+    inserted = updated = 0
+    for row in valid_rows:
+        key = (row["company_name"], row["linkedin_profile_url"])
+        if key in existing_pairs:
+            updated += 1
+        else:
+            inserted += 1
+            existing_pairs.add(key)
+    con.executemany(
+        """INSERT INTO employees
+               (company_name, first_name, last_name, job_title,
+                linkedin_profile_url, email)
+           VALUES (:company_name, :first_name, :last_name, :job_title,
+                   :linkedin_profile_url, :email)
+           ON CONFLICT(company_name, linkedin_profile_url) DO UPDATE SET
+               first_name = COALESCE(excluded.first_name, employees.first_name),
+               last_name  = COALESCE(excluded.last_name, employees.last_name),
+               job_title  = COALESCE(excluded.job_title, employees.job_title),
+               email      = COALESCE(excluded.email, employees.email)""",
+        valid_rows,
+    )
+    con.commit()
+    con.close()
+    return jsonify(ok=True, inserted=inserted, updated=updated, skipped=skipped)
+@app.route("/download_csv")
+def download_csv():
+    q = request.args.get("q", "").strip()
+    where = ""
+    params: list = []
+    if q:
+        where = "WHERE company_name LIKE ? ESCAPE '\\'"
+        params.append(f"%{_escape_like(q)}%")
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["company_name", "first_name", "last_name", "job_title",
+                      "linkedin_profile_url", "email"])
+    if DB_PATH.exists():
+        con = sqlite3.connect(DB_PATH)
+        try:
+            rows = con.execute(
+                f"""SELECT company_name, first_name, last_name, job_title,
+                           linkedin_profile_url, email
+                    FROM employees {where}
+                    ORDER BY company_name, last_name, first_name""",
+                params,
+            ).fetchall()
+            writer.writerows(rows)
+        except sqlite3.OperationalError:
+            pass
+        con.close()
+    filename = "employees_filtered.csv" if q else "employees.csv"
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 if __name__ == "__main__":
     app.run(debug=False, port=5000)

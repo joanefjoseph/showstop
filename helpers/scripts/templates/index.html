@@ -22,10 +22,20 @@
     th, td { border-bottom: 1px solid #e2e2e2; padding: .5rem; text-align: left; vertical-align: top; }
     th { background: #f0f2f5; position: sticky; top: 0; }
     td a { color: #0a66c2; }
+    td.url { word-break: break-all; }
     .pagination { margin-top: 1rem; display: flex; gap: .75rem; align-items: center; }
     .pagination a { text-decoration: none; color: #0a66c2; padding: .3rem .6rem; border: 1px solid #0a66c2; border-radius: 6px; }
     .pagination span.disabled { color: #999; padding: .3rem .6rem; border: 1px solid #ccc; border-radius: 6px; }
     .muted { color: #666; font-size: .9rem; }
+    .filter-form { display: flex; gap: .5rem; align-items: center; margin-top: 1rem; }
+    .filter-form input[type=text] { flex: 0 1 400px; padding: .5rem; font-size: 1rem;
+                                    border: 1px solid #bbb; border-radius: 6px; }
+    .clear-link { color: #0a66c2; }
+    .toolbar { display: flex; gap: 1rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
+    .toolbar form { display: flex; gap: .5rem; align-items: center; }
+    .toolbar input[type=file] { font-size: .9rem; }
+    .toolbar a button { background: #2c7a2c; }
+    #csv-message { margin-top: .5rem; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -46,6 +56,23 @@
     <div id="log"></div>
   </div>
   <h2>Saved People <span class="muted">({{ total }} total)</span></h2>
+  <form method="get" action="{{ url_for('index') }}" class="filter-form">
+    <input type="text" name="q" value="{{ q }}" placeholder="Filter by company name (e.g. weverse)">
+    <button type="submit">Filter</button>
+    {% if q %}
+      <a href="{{ url_for('index') }}" class="clear-link">Clear</a>
+    {% endif %}
+  </form>
+  <div class="toolbar">
+    <form id="csv-upload-form">
+      <input type="file" id="csv_file" name="csv_file" accept=".csv" required>
+      <button type="submit">Upload CSV</button>
+    </form>
+    <a href="{{ url_for('download_csv', q=q) }}">
+      <button type="button">Download CSV</button>
+    </a>
+  </div>
+  <div id="csv-message"></div>
   {% if rows %}
   <table>
     <thead>
@@ -65,7 +92,7 @@
         <td>{{ r.first_name or '' }}</td>
         <td>{{ r.last_name or '' }}</td>
         <td>{{ r.job_title or '' }}</td>
-        <td><a href="{{ r.linkedin_profile_url }}" target="_blank" rel="noopener">Profile</a></td>
+        <td class="url"><a href="{{ r.linkedin_profile_url }}" target="_blank" rel="noopener">{{ r.linkedin_profile_url }}</a></td>
         <td>{{ r.email or '' }}</td>
       </tr>
       {% endfor %}
@@ -73,19 +100,19 @@
   </table>
   <div class="pagination">
     {% if page > 1 %}
-      <a href="{{ url_for('index', page=page-1) }}">&larr; Previous</a>
+      <a href="{{ url_for('index', page=page-1, q=q) }}">&larr; Previous</a>
     {% else %}
       <span class="disabled">&larr; Previous</span>
     {% endif %}
     <span>Page {{ page }} of {{ pages }}</span>
     {% if page < pages %}
-      <a href="{{ url_for('index', page=page+1) }}">Next &rarr;</a>
+      <a href="{{ url_for('index', page=page+1, q=q) }}">Next &rarr;</a>
     {% else %}
       <span class="disabled">Next &rarr;</span>
     {% endif %}
   </div>
   {% else %}
-    <p class="muted">No rows yet. Run a scrape above to populate the table.</p>
+    <p class="muted">No rows yet{% if q %} matching "{{ q }}"{% endif %}.</p>
   {% endif %}
 <script>
   const form = document.getElementById('scrape-form');
@@ -94,8 +121,6 @@
   const logEl = document.getElementById('log');
   const msgEl = document.getElementById('message');
   let pollTimer = null;
-  // Keep the current table page when refreshing after a scrape.
-  const currentPage = new URLSearchParams(location.search).get('page') || '1';
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     msgEl.textContent = '';
@@ -120,7 +145,6 @@
     const data = await res.json();
     logEl.textContent = data.log.join('\n');
     logEl.scrollTop = logEl.scrollHeight;
-    // Show the "continue" button when the scraper is waiting for the login Enter.
     const waiting = data.log.some(l => l.includes('Press Enter'));
     continueBtn.style.display = (data.running && waiting) ? 'inline-block' : 'none';
     if (!data.running) {
@@ -128,15 +152,13 @@
       setRunning(false);
       const ok = data.returncode === 0;
       msgEl.textContent = ok ? 'Scrape finished.' : `Scrape ended with an error (exit code ${data.returncode}).`;
-      // Refresh the table so new rows appear.
-      setTimeout(() => location.href = '/?page=' + currentPage, 1000);
+      setTimeout(() => location.reload(), 1000);
     }
   }
   function setRunning(running) {
     submitBtn.disabled = running;
     submitBtn.textContent = running ? 'Scraping...' : 'Submit';
   }
-  // If a scrape was already running when the page loaded, resume polling.
   (async () => {
     const data = await (await fetch('/status')).json();
     if (data.running) {
@@ -145,6 +167,26 @@
       pollTimer = setInterval(poll, 2000);
     }
   })();
+  // --- CSV upload ---
+  const csvForm = document.getElementById('csv-upload-form');
+  const csvMsg = document.getElementById('csv-message');
+  csvForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fileInput = document.getElementById('csv_file');
+    if (!fileInput.files.length) return;
+    const body = new FormData();
+    body.append('csv_file', fileInput.files[0]);
+    csvMsg.textContent = 'Uploading...';
+    const res = await fetch('/upload_csv', { method: 'POST', body });
+    const data = await res.json();
+    if (!res.ok) {
+      csvMsg.textContent = data.error || 'Upload failed.';
+      return;
+    }
+    csvMsg.textContent =
+      `Inserted ${data.inserted}, updated ${data.updated}, skipped ${data.skipped} invalid row(s).`;
+    setTimeout(() => location.reload(), 1200);
+  });
 </script>
 </body>
 </html>
