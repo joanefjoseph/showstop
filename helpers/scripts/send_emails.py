@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 """
 Send personalized outreach emails via Namecheap Private Email.
-Recipients come from either people_data.csv or the `people_data` table of a SQLite DB.
-Usage:
-  python send_emails.py                          # dry run using DATA_SOURCE from .env (default: csv)
-  python send_emails.py --source sqlite          # dry run, reading from <COMPANY_NAME>.db
-  python send_emails.py --source sqlite --test-to me@mydomain.com   # send first 3 rows to YOURSELF
-  python send_emails.py --source sqlite --send   # send for real
+Recipients are read from the `employees` table of clients.db.
+Importable by app.py; the Flask UI is the entry point.
 """
 import argparse
-import csv
 import getpass
 import html
 import imaplib
@@ -26,8 +21,9 @@ from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 from pathlib import Path
 from dotenv import load_dotenv
+from config import BASE, DB_PATH, TABLE_NAME, SENT_TABLE_NAME
 # ------------------------- LOAD .env -------------------------
-load_dotenv(Path(__file__).resolve().with_name(".env"))
+load_dotenv(BASE / ".env")
 def require_env(name: str) -> str:
     value = os.getenv(name, "").strip()
     if not value:
@@ -36,26 +32,22 @@ def require_env(name: str) -> str:
 SENDER_NAME = require_env("SENDER_NAME")
 SENDER_EMAIL = require_env("SENDER_EMAIL")
 COMPANY_NAME = require_env("COMPANY_NAME")
-COMPANY_URL = require_env("COMPANY_URL")          # e.g. www.thenewcompany.com
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")  # falls back to a prompt if empty
-DEFAULT_SOURCE = os.getenv("DATA_SOURCE", "csv").strip().lower()
-DB_PATH = os.getenv("DB_PATH", "").strip() or f"{COMPANY_NAME}.db"
+COMPANY_URL = require_env("COMPANY_URL")                 # e.g. www.thenewcompany.com
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "").strip() # falls back to a prompt if empty
 # Link target: add https:// if the URL in .env doesn't include a scheme
 COMPANY_HREF = COMPANY_URL if re.match(r"^https?://", COMPANY_URL, re.I) else f"https://{COMPANY_URL}"
 # ------------------------- CONFIG -------------------------
 SMTP_HOST = "mail.privateemail.com"
-SMTP_PORT = 465                               # SSL. (587 + STARTTLS also works)
+SMTP_PORT = 465                     # SSL. (587 + STARTTLS also works)
 IMAP_HOST = "mail.privateemail.com"
 IMAP_PORT = 993
-SAVE_TO_SENT_FOLDER = True                    # SMTP sends don't show up in "Sent" otherwise
+SAVE_TO_SENT_FOLDER = True          # SMTP sends don't show up in "Sent" otherwise
 SENT_FOLDER = "Sent"
-CSV_PATH = "people_data.csv"
-CSV_DELIMITER = ","                           # change to "|" if your file is pipe-delimited
-SQLITE_TABLE = "people_data"
-LOG_PATH = "sent_log.csv"                     # prevents double-sending on re-runs
-MIN_DELAY_SEC = 45                            # random pause between emails
+MIN_DELAY_SEC = 45                  # random pause between emails
 MAX_DELAY_SEC = 90
-# ----------------------------------------------------------
+REQUIRED_COLUMNS = {"company_name", "first_name", "last_name", "email"}
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# ------------------------- EMAIL CONTENT -------------------------
 # Placeholders: {company} -> company name (bold in HTML), {sender} -> your name
 SUBJECT_TEMPLATE = "Direct-to-fan tour ticketing for {company_name}'s artists"
 INTRO = [
@@ -93,9 +85,6 @@ SIGNATURE = [
     "{sender}",
     "Founder & CEO | {company}",
 ]
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-REQUIRED_COLUMNS = {"company_name", "first_name", "last_name", "email_address"}
-# ------------------------- EMAIL CONTENT -------------------------
 def render(text: str, html_mode: bool) -> str:
     """Fill in {sender} and {company}. In HTML, the company name is bolded."""
     if html_mode:
@@ -139,153 +128,197 @@ def build_message(row: dict, to_addr: str) -> EmailMessage:
     msg.set_content(build_plain(row["first_name"]))
     msg.add_alternative(build_html(row["first_name"]), subtype="html")
     return msg
-# ------------------------- DATA SOURCES -------------------------
-def clean_records(records) -> list[dict]:
-    """Shared cleaning/validation for any data source (CSV or SQLite)."""
+# ------------------------- DATA SOURCE -------------------------
+def clean_records(records: list[dict], log=print) -> list[dict]:
+    """Normalize, validate, and de-duplicate employee records."""
     rows, seen = [], set()
     for n, raw in enumerate(records, start=1):
         row = {k: ("" if v is None else str(v)).strip().strip('"').strip()
                for k, v in raw.items() if k}
-        email = row["email_address"].lower()
+        email = row.get("email", "").lower()
         if not EMAIL_RE.match(email):
-            print(f"  [skip] record {n}: invalid email {row['email_address']!r}")
-        elif not row["first_name"] or not row["company_name"]:
-            print(f"  [skip] record {n}: missing first_name/company_name")
+            log(f"  [skip] record {n}: invalid email {row.get('email')!r}")
+        elif not row.get("first_name") or not row.get("company_name"):
+            log(f"  [skip] record {n}: missing first_name/company_name")
         elif email in seen:
-            print(f"  [skip] record {n}: duplicate {email}")
+            log(f"  [skip] record {n}: duplicate {email}")
         else:
             seen.add(email)
             rows.append(row)
     return rows
-def load_rows_csv(path: str) -> list[dict]:
-    if not Path(path).is_file():
-        sys.exit(f"CSV file not found: {path}")
-    with open(path, newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f, delimiter=CSV_DELIMITER, skipinitialspace=True)
-        reader.fieldnames = [h.strip().strip('"') for h in (reader.fieldnames or [])]
-        missing = REQUIRED_COLUMNS - set(reader.fieldnames)
-        if missing:
-            sys.exit(f"CSV is missing columns: {missing}. Found: {reader.fieldnames}")
-        return clean_records(reader)
-def load_rows_sqlite(db_path: str) -> list[dict]:
-    path = Path(db_path).expanduser().resolve()
-    # Check first: sqlite3 would silently create an empty DB if the file didn't exist.
+def load_rows_sqlite(db_path: Path = DB_PATH, log=print) -> list[dict]:
+    path = Path(db_path).resolve()
     if not path.is_file():
-        sys.exit(f"SQLite database not found: {path}\n"
-                 f"(Expected '<COMPANY_NAME>.db'. Set DB_PATH in .env or use --db to override.)")
+        raise RuntimeError(f"Database not found: {path}")
     try:
-        # Read-only connection: this script never modifies your database.
+        # Read-only connection: this module never modifies the database.
         conn = sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True)
     except sqlite3.Error as exc:
-        sys.exit(f"Could not open database {path}: {exc}")
+        raise RuntimeError(f"Could not open database {path}: {exc}") from exc
     try:
         conn.row_factory = sqlite3.Row
-        cols = {r["name"] for r in conn.execute(f'PRAGMA table_info("{SQLITE_TABLE}")')}
+        cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({TABLE_NAME})")}
         if not cols:
-            tables = [r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'")]
-            sys.exit(f"Table '{SQLITE_TABLE}' not found in {path.name}. Tables present: {tables}")
+            raise RuntimeError(f"Table '{TABLE_NAME}' not found in {path.name}")
         missing = REQUIRED_COLUMNS - cols
         if missing:
-            sys.exit(f"Table '{SQLITE_TABLE}' is missing columns: {missing}. Found: {sorted(cols)}")
-        records = [dict(r) for r in conn.execute(f'SELECT * FROM "{SQLITE_TABLE}"')]
+            raise RuntimeError(f"Table '{TABLE_NAME}' is missing columns: {sorted(missing)}")
+        records = [dict(r) for r in conn.execute(f"SELECT * FROM {TABLE_NAME}")]
     except sqlite3.Error as exc:
-        sys.exit(f"Database error: {exc}")
+        raise RuntimeError(f"Database error: {exc}") from exc
     finally:
         conn.close()
-    return clean_records(records)
+    return clean_records(records, log)
 # ------------------------- SEND LOG -------------------------
+def _connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+def init_sent_table() -> None:
+    """Create the sent_emails table if it doesn't exist yet (idempotent)."""
+    conn = _connect()
+    try:
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS {SENT_TABLE_NAME} (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp     TEXT NOT NULL,
+                email         TEXT NOT NULL,
+                status        TEXT NOT NULL,
+                detail        TEXT
+            )
+        """)
+        conn.execute(f"""
+            CREATE INDEX IF NOT EXISTS idx_{SENT_TABLE_NAME}_email_status
+            ON {SENT_TABLE_NAME} (email, status)
+        """)
+        conn.commit()
+    finally:
+        conn.close()
 def load_already_sent() -> set[str]:
-    if not os.path.exists(LOG_PATH):
-        return set()
-    with open(LOG_PATH, newline="", encoding="utf-8") as f:
-        return {r["email_address"].lower() for r in csv.DictReader(f) if r["status"] == "sent"}
+    init_sent_table()
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            f"SELECT DISTINCT LOWER(email) AS email "
+            f"FROM {SENT_TABLE_NAME} WHERE status = 'sent'"
+        ).fetchall()
+    finally:
+        conn.close()
+    return {r["email"] for r in rows}
 def log_result(email: str, status: str, detail: str = "") -> None:
-    new = not os.path.exists(LOG_PATH)
-    with open(LOG_PATH, "a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        if new:
-            w.writerow(["timestamp", "email_address", "status", "detail"])
-        w.writerow([datetime.now().isoformat(timespec="seconds"), email, status, detail])
+    init_sent_table()
+    conn = _connect()
+    try:
+        conn.execute(
+            f"INSERT INTO {SENT_TABLE_NAME} (timestamp, email, status, detail) "
+            f"VALUES (?, ?, ?, ?)",
+            (datetime.now().isoformat(timespec="seconds"), email, status, detail),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 # ------------------------- SENDING -------------------------
 def smtp_send(msg: EmailMessage, password: str) -> None:
     ctx = ssl.create_default_context()
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=ctx, timeout=60) as s:
         s.login(SENDER_EMAIL, password)
         s.send_message(msg)
-def save_to_sent(msg: EmailMessage, password: str) -> None:
+def save_to_sent(msg: EmailMessage, password: str, log=print) -> None:
     try:
         with imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT) as imap:
             imap.login(SENDER_EMAIL, password)
             imap.append(SENT_FOLDER, "\\Seen", imaplib.Time2Internaldate(time.time()),
                         msg.as_bytes())
     except Exception as exc:  # non-fatal
-        print(f"    (couldn't copy to Sent folder: {exc})")
+        log(f"    (couldn't copy to Sent folder: {exc})")
+def require_password() -> str:
+    if not EMAIL_PASSWORD:
+        raise RuntimeError("EMAIL_PASSWORD is not set in your .env file.")
+    return EMAIL_PASSWORD
+# ------------------------- PUBLIC API -------------------------
+def get_recipients(limit: int | None = None, test_to: str | None = None, log=print) -> list[dict]:
+    """
+    Mirrors the original CLI behavior:
+      - test mode: first `limit` (default 3) rows, ignoring the sent log
+      - send mode: rows not yet sent, optionally capped at `limit`
+    """
+    rows = load_rows_sqlite(DB_PATH, log)
+    if not test_to:
+        already = load_already_sent()
+        rows = [r for r in rows if r["email"].lower() not in already]
+    if test_to:
+        rows = rows[: limit or 3]
+    elif limit:
+        rows = rows[:limit]
+    log(f"{len(rows)} email(s) queued.")
+    return rows
+def preview_first() -> dict | None:
+    """Return the rendered email that would go to the first queued recipient."""
+    rows = get_recipients(log=lambda _m: None)
+    if not rows:
+        return None
+    first = rows[0]
+    return {
+        "to": first["email"],
+        "subject": SUBJECT_TEMPLATE.format(company_name=first["company_name"]),
+        "plain": build_plain(first["first_name"]),
+        "html": build_html(first["first_name"]),
+        "count": len(rows),
+    }
+def send_campaign(rows: list[dict], test_to: str | None = None, log=print) -> None:
+    password = require_password()
+    for i, row in enumerate(rows, 1):
+        to_addr = test_to or row["email"]
+        msg = build_message(row, to_addr)
+        try:
+            smtp_send(msg, password)
+            log(f"[{i}/{len(rows)}] sent -> {to_addr}  ({row['company_name']})")
+            if not test_to:
+                log_result(row["email"], "sent")
+                if SAVE_TO_SENT_FOLDER:
+                    save_to_sent(msg, password, log)
+        except smtplib.SMTPAuthenticationError:
+            log("Login failed. Check SENDER_EMAIL / EMAIL_PASSWORD in .env.")
+            return
+        except smtplib.SMTPRecipientsRefused as exc:
+            log(f"[{i}/{len(rows)}] REFUSED {to_addr}: {exc}")
+            log_result(row["email"], "refused", str(exc))
+        except Exception as exc:
+            log(f"[{i}/{len(rows)}] ERROR {to_addr}: {exc}")
+            log_result(row["email"], "error", str(exc))
+            if "limit" in str(exc).lower() or "rate" in str(exc).lower():
+                log("Looks like a sending limit. Stop and re-run later; progress is saved.")
+                return
+        if i < len(rows):
+            time.sleep(random.uniform(MIN_DELAY_SEC, MAX_DELAY_SEC) if not test_to else 2)
+    log("Done.")
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", choices=["csv", "sqlite"], default=DEFAULT_SOURCE,
-                    help="where to read recipients from (default: DATA_SOURCE in .env, else csv)")
-    ap.add_argument("--csv", default=CSV_PATH, metavar="PATH", help="CSV path override")
-    ap.add_argument("--db", default=DB_PATH, metavar="PATH",
-                    help="SQLite path override (default: <COMPANY_NAME>.db)")
     ap.add_argument("--send", action="store_true", help="actually send to recipients")
     ap.add_argument("--test-to", metavar="EMAIL",
                     help="send the first few rows to this address instead of the real recipients")
     ap.add_argument("--limit", type=int, default=None, help="max emails this run")
     args = ap.parse_args()
-    if args.source == "sqlite":
-        print(f"Reading recipients from SQLite: {args.db} (table '{SQLITE_TABLE}')")
-        rows = load_rows_sqlite(args.db)
-    else:
-        print(f"Reading recipients from CSV: {args.csv}")
-        rows = load_rows_csv(args.csv)
-    already = load_already_sent()
-    if not args.test_to:
-        rows = [r for r in rows if r["email_address"].lower() not in already]
-    if args.test_to:
-        rows = rows[: args.limit or 3]
-    elif args.limit:
-        rows = rows[: args.limit]
-    print(f"{len(rows)} email(s) queued ({len(already)} already sent previously).")
+    print(f"Reading recipients from SQLite: {DB_PATH} (table '{TABLE_NAME}')")
+    rows = get_recipients(limit=args.limit, test_to=args.test_to)
     if not rows:
         return
     # ---------- DRY RUN ----------
     if not args.send and not args.test_to:
-        sample = build_message(rows[0], rows[0]["email_address"])
         print("\n--- DRY RUN: preview of first email (plain-text version) ---")
-        print(f"To:      {sample['To']}\nSubject: {sample['Subject']}\n")
-        print(build_plain(rows[0]["first_name"]))
-        print("\n--- all recipients ---")
-        for r in rows:
-            print(f"  {r['email_address']:<40} {SUBJECT_TEMPLATE.format(**r)}")
+        sample = preview_first()
+        if sample is None:
+            print("No eligible recipients in clients.db.")
+            return
+        print(f"To:      {sample['to']}\nSubject: {sample['subject']}\n")
+        print(sample['plain'])
         print("\nNothing was sent. Use --test-to you@domain.com, then --send.")
         return
     password = EMAIL_PASSWORD or getpass.getpass(f"Password for {SENDER_EMAIL}: ")
     if args.send and not args.test_to:
         if input(f"Send {len(rows)} real emails? Type 'yes': ").strip().lower() != "yes":
             return
-    for i, row in enumerate(rows, 1):
-        to_addr = args.test_to or row["email_address"]
-        msg = build_message(row, to_addr)
-        try:
-            smtp_send(msg, password)
-            print(f"[{i}/{len(rows)}] sent -> {to_addr}  ({row['company_name']})")
-            if not args.test_to:
-                log_result(row["email_address"], "sent")
-                if SAVE_TO_SENT_FOLDER:
-                    save_to_sent(msg, password)
-        except smtplib.SMTPAuthenticationError:
-            sys.exit("Login failed. Check SENDER_EMAIL / EMAIL_PASSWORD in .env.")
-        except smtplib.SMTPRecipientsRefused as exc:
-            print(f"[{i}/{len(rows)}] REFUSED {to_addr}: {exc}")
-            log_result(row["email_address"], "refused", str(exc))
-        except Exception as exc:
-            print(f"[{i}/{len(rows)}] ERROR {to_addr}: {exc}")
-            log_result(row["email_address"], "error", str(exc))
-            if "limit" in str(exc).lower() or "rate" in str(exc).lower():
-                sys.exit("Looks like a sending limit. Stop and re-run later; progress is saved.")
-        if i < len(rows):
-            time.sleep(random.uniform(MIN_DELAY_SEC, MAX_DELAY_SEC) if not args.test_to else 2)
+    send_campaign(rows=rows, test_to=args.test_to)
     print("Done.")
 if __name__ == "__main__":
     main()

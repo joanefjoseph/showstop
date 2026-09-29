@@ -23,6 +23,7 @@ import sqlite3
 import sys
 import time
 from pathlib import Path
+from config import DB_PATH
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 # --------------------------------------------------------------------------- #
@@ -207,7 +208,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Scrape a LinkedIn company People page.")
     ap.add_argument("people_url",
                     help="e.g. https://www.linkedin.com/company/acme/people/")
-    ap.add_argument("--sqlite", required=True,
+    ap.add_argument("--sqlite", default=str(DB_PATH), metavar="PATH",
                     help="SQLite DB path (table: employees)")
     ap.add_argument("--max-people", type=int, default=100,
                     help="Max NEW profiles to save per run (default 100)")

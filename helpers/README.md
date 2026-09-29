@@ -32,3 +32,54 @@ python send_emails.py --verify-only                                 # look up bl
 python send_emails.py --test-to you@yourdomain.com
 python send_emails.py --send --limit 20
 ```
+
+# db_tools.py Usage Examples
+
+## Delete rows by one column
+
+```
+python db_tool.py --remove --table employees --column company_name --key "Acme"
+```
+## Delete a single employee by two columns
+
+```
+python db_tool.py --remove --table employees \
+    --column company_name --key "Acme" \
+    --column linkedin_profile_url --key "https://www.linkedin.com/in/jane-doe/"
+```
+Every `--column` is paired with the `--key` in the same position, and all conditions must match.
+
+
+## Upsert one row (e.g., a Hunter result found in the web UI)
+
+```
+python db_tool.py --upsert --table hunter_lookups \
+    --set domain=reddit.com \
+    --set first_name=Alexis \
+    --set last_name=Ohanian \
+    --set email=alexis.ohanian@reddit.com \
+    --set score=81
+```
+`queried_at` is filled in automatically, and the name and domain values are lowercased so they match the cache keys used by `hunter.py`.
+
+
+## Upsert from a CSV file
+
+```
+python db_tool.py --upsert-csv new_employees.csv --table employees
+```
+The CSV header must use real column names, for example:
+
+
+```
+company_name,first_name,last_name,job_title,linkedin_profile_url,email
+Acme,Jane,Doe,Engineer,https://www.linkedin.com/in/jane-doe/,jane@acme.com
+```
+## Preview without changing anything
+
+Any command accepts `--dry-run`:
+
+
+```
+python db_tool.py --remove --table employees --column company_name --key "Acme" --dry-run
+```

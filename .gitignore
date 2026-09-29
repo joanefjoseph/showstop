@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 li_browser_profile/
+__pycache__/
 
 # Environment variables
 .env

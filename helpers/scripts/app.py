@@ -9,7 +9,16 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, render_template, request, url_for
 from linkedin_people_scraper import clean_profile_url, init_sqlite
 BASE = Path(__file__).resolve().parent
-DB_PATH = BASE / "all_people.db"
+import threading          # already present
+from config import DB_PATH
+from hunter import fill_missing_emails, require_key
+from send_emails import (
+    EMAIL_RE,
+    get_recipients,
+    preview_first,
+    require_password,
+    send_campaign,
+)
 SCRAPER = BASE / "linkedin_people_scraper.py"
 PER_PAGE = 25
 CSV_FIELDS = ("first_name", "last_name", "job_title", "email")
@@ -234,5 +243,109 @@ def download_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+# ------------------------------------------------------------------ #
+# Email outreach
+# ------------------------------------------------------------------ #
+EMAIL_JOB = {"running": False, "log": [], "returncode": None}
+email_lock = threading.Lock()
+def _email_log(line: str) -> None:
+    with email_lock:
+        EMAIL_JOB["log"].append(line)
+def _email_worker(rows: list, test_to: str | None) -> None:
+    rc = 0
+    try:
+        send_campaign(rows, test_to=test_to, log=_email_log)
+    except Exception as exc:
+        _email_log(f"ERROR: {exc}")
+        rc = 1
+    with email_lock:
+        EMAIL_JOB["running"] = False
+        EMAIL_JOB["returncode"] = rc
+def _start_email(test_to: str | None, limit: int | None):
+    with email_lock:
+        if EMAIL_JOB["running"]:
+            return jsonify(error="An email job is already running."), 409
+        EMAIL_JOB.update(running=True, log=[], returncode=None)
+    try:
+        require_password()
+        rows = get_recipients(limit=limit, test_to=test_to, log=_email_log)
+    except Exception as exc:
+        with email_lock:
+            EMAIL_JOB["running"] = False
+        return jsonify(error=str(exc)), 400
+    if not rows:
+        with email_lock:
+            EMAIL_JOB.update(running=False, returncode=0)
+        return jsonify(error="No recipients to email."), 400
+    threading.Thread(target=_email_worker, args=(rows, test_to), daemon=True).start()
+    return jsonify(ok=True, count=len(rows))
+@app.route("/email/preview")
+def email_preview():
+    try:
+        info = preview_first()
+    except Exception as exc:
+        return jsonify(error=str(exc)), 400
+    if info is None:
+        return jsonify(error="No eligible recipients in clients.db."), 400
+    return jsonify(ok=True, **info)
+@app.route("/email/test", methods=["POST"])
+def email_test():
+    test_to = request.form.get("test_to", "").strip()
+    if not EMAIL_RE.match(test_to):
+        return jsonify(error="Enter a valid tester email address."), 400
+    return _start_email(test_to=test_to, limit=None)
+@app.route("/email/send", methods=["POST"])
+def email_send():
+    raw = request.form.get("limit", "").strip()
+    if raw and (not raw.isdigit() or int(raw) < 1):
+        return jsonify(error="Limit must be a positive number."), 400
+    return _start_email(test_to=None, limit=int(raw) if raw else None)
+@app.route("/email/status")
+def email_status():
+    with email_lock:
+        return jsonify(
+            running=EMAIL_JOB["running"],
+            returncode=EMAIL_JOB["returncode"],
+            log=EMAIL_JOB["log"][-300:],
+        )
+# ------------------------------------------------------------------ #
+# Email search (Hunter.io)
+# ------------------------------------------------------------------ #
+HUNTER_JOB = {"running": False, "log": [], "returncode": None}
+hunter_lock = threading.Lock()
+def _hunter_log(line: str) -> None:
+    with hunter_lock:
+        HUNTER_JOB["log"].append(line)
+def _hunter_worker() -> None:
+    rc = 0
+    try:
+        stats = fill_missing_emails(log=_hunter_log)
+        summary = ", ".join(f"{k}={v}" for k, v in stats.items())
+        _hunter_log(f"Done. {summary}")
+    except Exception as exc:
+        _hunter_log(f"ERROR: {exc}")
+        rc = 1
+    with hunter_lock:
+        HUNTER_JOB.update(running=False, returncode=rc)
+@app.route("/hunter/start", methods=["POST"])
+def hunter_start():
+    try:
+        require_key()
+    except RuntimeError as exc:
+        return jsonify(error=str(exc)), 400
+    with hunter_lock:
+        if HUNTER_JOB["running"]:
+            return jsonify(error="An email search is already running."), 409
+        HUNTER_JOB.update(running=True, log=[], returncode=None)
+    threading.Thread(target=_hunter_worker, daemon=True).start()
+    return jsonify(ok=True)
+@app.route("/hunter/status")
+def hunter_status():
+    with hunter_lock:
+        return jsonify(
+            running=HUNTER_JOB["running"],
+            returncode=HUNTER_JOB["returncode"],
+            log=HUNTER_JOB["log"][-300:],
+        )
 if __name__ == "__main__":
     app.run(debug=False, port=5000)
