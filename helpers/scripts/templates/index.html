@@ -94,12 +94,16 @@
         <td>{{ r.first_name or '' }}</td>
         <td>{{ r.last_name or '' }}</td>
         <td>{{ r.job_title or '' }}</td>
-        <td class="url"><a href="{{ r.linkedin_profile_url }}" target="_blank" rel="noopener">{{ r.linkedin_profile_url }}</a></td>
+        <td class="url">
+          <a href="{{ r.linkedin_profile_url }}" target="_blank" rel="noopener"
+            class="connect-link" data-first-name="{{ r.first_name or '' }}">{{ r.linkedin_profile_url }}</a>
+        </td>
         <td>{{ r.email or '' }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  <div id="connect-note-message" class="muted" style="margin-top:.5rem;"></div>
   <div class="pagination">
     {% if page > 1 %}
       <a href="{{ url_for('index', page=page-1, q=q) }}">&larr; Previous</a>
@@ -237,6 +241,27 @@
       csvMsg.textContent =
         `Inserted ${data.inserted}, updated ${data.updated}, skipped ${data.skipped} invalid row(s).`;
       setTimeout(() => location.reload(), 1200);
+    });
+    // --- Copy a personalized connection note when a LinkedIn profile is opened ---
+    const connectMsg = document.getElementById('connect-note-message');
+    document.querySelectorAll('a.connect-link').forEach(a => {
+      a.addEventListener('click', async () => {
+        const first = a.dataset.firstName || 'there';
+        const note = `Hi ${first}, I am building a fan-focused middleware engine that embeds ` +
+          `primary ticketing checkout directly into artists' sites. Fans buy seats natively via ` +
+          `their verified membership ID—eliminating promo code leaks, retaining fan data, and ` +
+          `capturing post-checkout merch upsells. Would love to connect!`;
+        try {
+          await navigator.clipboard.writeText(note);
+          if (connectMsg) {
+            connectMsg.textContent = `Note for ${first} copied to clipboard — paste it into "Add a note".`;
+            setTimeout(() => { connectMsg.textContent = ''; }, 4000);
+          }
+        } catch (err) {
+          if (connectMsg) connectMsg.textContent = 'Could not copy note to clipboard (clipboard permission denied).';
+          console.warn('Clipboard copy failed:', err);
+        }
+      });
     });
     // --- Email outreach (shared logic for initial + follow-up campaigns) ---
     function wireEmailOutreach(cfg) {

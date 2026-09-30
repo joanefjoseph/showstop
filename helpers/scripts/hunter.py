@@ -9,7 +9,7 @@ import sqlite3
 import time
 import requests
 from dotenv import load_dotenv
-from config import BASE, DB_PATH, TABLE_NAME, CLIENT_METADATA_TABLE
+from config import BASE, DB_PATH, TABLE_NAME, METADATA_TABLE_NAME
 load_dotenv(BASE / ".env")
 HUNTER_URL = "https://api.hunter.io/v2/email-finder"
 HUNTER_API_KEY = os.getenv("HUNTER_API_KEY", "").strip()
@@ -83,7 +83,7 @@ def fill_missing_emails(log=print) -> dict:
             SELECT e.company_name, e.first_name, e.last_name,
                    e.linkedin_profile_url, m.domain
             FROM {TABLE_NAME} e
-            LEFT JOIN {CLIENT_METADATA_TABLE} m ON m.company_name = e.company_name
+            LEFT JOIN {METADATA_TABLE_NAME} m ON m.company_name = e.company_name
             WHERE e.email IS NULL OR TRIM(e.email) = ''
         """).fetchall()
         stats["missing"] = len(targets)
@@ -93,7 +93,7 @@ def fill_missing_emails(log=print) -> dict:
             domain = (t["domain"] or "").strip().lower()
             if not domain:
                 stats["no_domain"] += 1
-                log(f"[skip] {t['company_name']}: no domain in {CLIENT_METADATA_TABLE}")
+                log(f"[skip] {t['company_name']}: no domain in {METADATA_TABLE_NAME}")
                 continue
             if not first_raw or not last_raw:
                 stats["no_name"] += 1

@@ -26,7 +26,7 @@ from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 from pathlib import Path
 from dotenv import load_dotenv
-from config import BASE, DB_PATH, TABLE_NAME, SENT_TABLE_NAME
+from config import BASE, DB_PATH, TABLE_NAME, SENT_TABLE_NAME, METADATA_TABLE_NAME
 # -------------------------- LOAD .env -------------------------------
 load_dotenv(BASE / ".env")
 def require_env(name: str) -> str:
@@ -51,6 +51,7 @@ SENT_FOLDER = "Sent"
 MIN_DELAY_SEC = 45                   # random pause between emails
 MAX_DELAY_SEC = 90
 REQUIRED_COLUMNS = {"company_name", "first_name", "last_name", "email"}
+REQUIRED_METADATA_COLUMNS = {"company_name", "email_name"}   # client_metadata
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # -------------------------- EMAIL CONTENT -----------------------------
 # Formatting cheatsheet -- this is the ONE convention used everywhere
@@ -58,10 +59,10 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 #
 #   *word*            -> bold in the HTML version (asterisks are simply
 #                         dropped in the plain-text version)
-#   {sender}          -> your name                     (SENDER_NAME)
-#   {company}         -> your own company              (COMPANY_NAME)
-#   {company_name}    -> the recipient's employer      (row["company_name"])
-#   {first_name}      -> the recipient's first name    (row["first_name"])
+#   {sender}          -> your name                          (SENDER_NAME)
+#   {company}         -> your own company                   (COMPANY_NAME)
+#   {email_name}     -> the recipient's company, shortened  (client_metadata.email_name)
+#   {first_name}      -> the recipient's first name         (row["first_name"])
 #
 # Each campaign below is a dict with:
 #   subject  : str  -- may use any of the placeholders above
@@ -78,7 +79,7 @@ CAMPAIGN_INITIAL = "initial"
 CAMPAIGN_FOLLOWUP = "followup"
 EMAILS = {
     CAMPAIGN_INITIAL: {
-        "subject": "Direct-to-fan tour ticketing for {company_name}'s artists",
+        "subject": "Direct-to-fan tour ticketing for {email_name}'s artists",
         "greeting": "Hello {first_name},",
         "blocks": [
             ("intro", [
@@ -88,7 +89,7 @@ EMAILS = {
                 "allows your artists to host primary ticket sales directly on their own "
                 "websites—connecting natively to primary ticketing APIs like Ticketmaster and AXS.",
                 "Instead of losing fans to third-party portals where drop-off is high and "
-                "post-sale revenue is lost, *{company}* enables:",
+                "post-sale revenue is lost, {company} enables:",
             ]),
             ("bullets", [
                 "*Direct Ecosystem Monetization:* Keep fans on your artist's website through the "
@@ -118,11 +119,11 @@ EMAILS = {
             ("body", [
                 "I'm following up on my previous message about *{company}* - the software product "
                 "that will *revolutionize* the way that you manage ticket sales for all of your artists.",
-                "Our company is called *{company}* because we are changing the game for how music "
+                "Our company is called {company} because we are changing the game for how music "
                 "labels and fan platforms envision what it takes to put on a show, and we aim to "
                 "be a one-stop shop for all of your concert ticketing needs.",
                 "We are finalizing our software architecture and are looking for 2-3 design partners "
-                "in the music space to test the beta. Given {company_name}'s focus on fan experience, "
+                "in the music space to test the beta. Given {email_name}'s focus on fan experience, "
                 "I'd love to show you the prototype and get your feedback.",
                 "Are you open to a brief 10-minute intro call this week?",
             ]),
@@ -183,7 +184,7 @@ def _render_blocks(blocks: list[tuple[str, list[str]]], html_mode: bool, **field
             raise ValueError(f"Unknown email block kind: {kind!r}")
     return chunks
 def _fields_for(row: dict) -> dict:
-    return {"first_name": row["first_name"], "company_name": row["company_name"]}
+    return {"first_name": row["first_name"], "email_name": row["email_name"]}
 def build_subject(row: dict, campaign: str) -> str:
     return render(EMAILS[campaign]["subject"], False, **_fields_for(row))
 def build_plain(row: dict, campaign: str) -> str:
@@ -229,6 +230,8 @@ def clean_records(records: list[dict], log=print) -> list[dict]:
             log(f"  [skip] record {n}: invalid email {row.get('email')!r}")
         elif not row.get("first_name") or not row.get("company_name"):
             log(f"  [skip] record {n}: missing first_name/company_name")
+        elif not row.get("email_name"):
+            log(f"  [skip] record {n}: no email_name in client_metadata for {row.get('company_name')!r}")
         elif email in seen:
             log(f"  [skip] record {n}: duplicate {email}")
         else:
@@ -252,7 +255,19 @@ def load_rows_sqlite(db_path: Path = DB_PATH, log=print) -> list[dict]:
         missing = REQUIRED_COLUMNS - cols
         if missing:
             raise RuntimeError(f"Table '{TABLE_NAME}' is missing columns: {sorted(missing)}")
-        records = [dict(r) for r in conn.execute(f"SELECT * FROM {TABLE_NAME}")]
+        meta_cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({METADATA_TABLE_NAME})")}
+        if not meta_cols:
+            raise RuntimeError(f"Table '{METADATA_TABLE_NAME}' not found in {path.name}")
+        meta_missing = REQUIRED_METADATA_COLUMNS - meta_cols
+        if meta_missing:
+            raise RuntimeError(
+                f"Table '{METADATA_TABLE_NAME}' is missing columns: {sorted(meta_missing)}"
+            )
+        records = [dict(r) for r in conn.execute(
+            f"""SELECT e.*, m.email_name AS email_name
+                FROM {TABLE_NAME} e
+                LEFT JOIN {METADATA_TABLE_NAME} m ON m.company_name = e.company_name"""
+        )]
     except sqlite3.Error as exc:
         raise RuntimeError(f"Database error: {exc}") from exc
     finally:
