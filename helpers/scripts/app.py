@@ -9,10 +9,11 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, render_template, request, url_for
 from linkedin_people_scraper import clean_profile_url, init_sqlite
 BASE = Path(__file__).resolve().parent
-import threading          # already present
 from config import DB_PATH
 from hunter import fill_missing_emails, require_key
 from send_emails import (
+    CAMPAIGN_INITIAL,
+    CAMPAIGN_FOLLOWUP,
     EMAIL_RE,
     get_recipients,
     preview_first,
@@ -27,9 +28,9 @@ app = Flask(__name__)
 # Single shared scrape job (only one browser session at a time).
 job = {"proc": None, "running": False, "log": [], "returncode": None}
 job_lock = threading.Lock()
-# --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------- #
 # Database
-# --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------- #
 def _escape_like(text: str) -> str:
     """Escape LIKE wildcards so the search is a literal substring match."""
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -68,9 +69,9 @@ def fetch_page(page: int, company_filter: str = "") -> tuple[list[dict], int, in
     ).fetchall()
     con.close()
     return [dict(r) for r in rows], total, page
-# --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------- #
 # Scrape job management
-# --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------- #
 def _reader(proc: subprocess.Popen) -> None:
     """Stream the scraper's output into the job log."""
     for line in proc.stdout:
@@ -113,7 +114,7 @@ def scrape():
         proc = subprocess.Popen(
             cmd,
             cwd=BASE,
-            stdin=subprocess.PIPE,      # lets the UI answer the login prompt
+            stdin=subprocess.PIPE,       # lets the UI answer the login prompt
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -140,9 +141,9 @@ def continue_scrape():
         proc.stdin.write("\n")
         proc.stdin.flush()
     return jsonify(ok=True)
-# --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------- #
 # CSV upload / download
-# --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------- #
 @app.route("/upload_csv", methods=["POST"])
 def upload_csv():
     file = request.files.get("csv_file")
@@ -175,7 +176,7 @@ def upload_csv():
             "linkedin_profile_url": profile_url,
         }
         for field in CSV_FIELDS:
-            row[field] = values.get(field) or None   # blank/missing -> None
+            row[field] = values.get(field) or None  # blank/missing -> None
         valid_rows.append(row)
     if not valid_rows:
         return jsonify(
@@ -243,46 +244,59 @@ def download_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
-# ------------------------------------------------------------------ #
-# Email outreach
-# ------------------------------------------------------------------ #
+# --------------------------------------------------------------------- #
+# Email outreach (initial + follow-up campaigns)
+# --------------------------------------------------------------------- #
 EMAIL_JOB = {"running": False, "log": [], "returncode": None}
 email_lock = threading.Lock()
+FOLLOWUP_JOB = {"running": False, "log": [], "returncode": None}
+followup_lock = threading.Lock()
 def _email_log(line: str) -> None:
     with email_lock:
         EMAIL_JOB["log"].append(line)
-def _email_worker(rows: list, test_to: str | None) -> None:
+def _followup_log(line: str) -> None:
+    with followup_lock:
+        FOLLOWUP_JOB["log"].append(line)
+def _email_worker(rows: list, test_to: str | None, campaign: str,
+                   job: dict, lock: threading.Lock, log) -> None:
     rc = 0
     try:
-        send_campaign(rows, test_to=test_to, log=_email_log)
+        send_campaign(rows, test_to=test_to, campaign=campaign, log=log)
     except Exception as exc:
-        _email_log(f"ERROR: {exc}")
+        log(f"ERROR: {exc}")
         rc = 1
-    with email_lock:
-        EMAIL_JOB["running"] = False
-        EMAIL_JOB["returncode"] = rc
-def _start_email(test_to: str | None, limit: int | None):
-    with email_lock:
-        if EMAIL_JOB["running"]:
+    with lock:
+        job["running"] = False
+        job["returncode"] = rc
+def _start_email(test_to: str | None, limit: int | None, campaign: str,
+                  job: dict, lock: threading.Lock, log):
+    with lock:
+        if job["running"]:
             return jsonify(error="An email job is already running."), 409
-        EMAIL_JOB.update(running=True, log=[], returncode=None)
+        job.update(running=True, log=[], returncode=None)
     try:
         require_password()
-        rows = get_recipients(limit=limit, test_to=test_to, log=_email_log)
+        rows = get_recipients(limit=limit, test_to=test_to, campaign=campaign, log=log)
     except Exception as exc:
-        with email_lock:
-            EMAIL_JOB["running"] = False
+        with lock:
+            job["running"] = False
         return jsonify(error=str(exc)), 400
     if not rows:
-        with email_lock:
-            EMAIL_JOB.update(running=False, returncode=0)
-        return jsonify(error="No recipients to email."), 400
-    threading.Thread(target=_email_worker, args=(rows, test_to), daemon=True).start()
+        with lock:
+            job.update(running=False, returncode=0)
+        no_rows_msg = (
+            "No recipients to email."
+            if campaign == CAMPAIGN_INITIAL
+            else "No one is eligible for a follow-up yet (they must have received the first email already)."
+        )
+        return jsonify(error=no_rows_msg), 400
+    threading.Thread(target=_email_worker, args=(rows, test_to, campaign, job, lock, log),
+                      daemon=True).start()
     return jsonify(ok=True, count=len(rows))
 @app.route("/email/preview")
 def email_preview():
     try:
-        info = preview_first()
+        info = preview_first(campaign=CAMPAIGN_INITIAL)
     except Exception as exc:
         return jsonify(error=str(exc)), 400
     if info is None:
@@ -293,13 +307,15 @@ def email_test():
     test_to = request.form.get("test_to", "").strip()
     if not EMAIL_RE.match(test_to):
         return jsonify(error="Enter a valid tester email address."), 400
-    return _start_email(test_to=test_to, limit=None)
+    return _start_email(test_to=test_to, limit=None, campaign=CAMPAIGN_INITIAL,
+                         job=EMAIL_JOB, lock=email_lock, log=_email_log)
 @app.route("/email/send", methods=["POST"])
 def email_send():
     raw = request.form.get("limit", "").strip()
     if raw and (not raw.isdigit() or int(raw) < 1):
         return jsonify(error="Limit must be a positive number."), 400
-    return _start_email(test_to=None, limit=int(raw) if raw else None)
+    return _start_email(test_to=None, limit=int(raw) if raw else None, campaign=CAMPAIGN_INITIAL,
+                         job=EMAIL_JOB, lock=email_lock, log=_email_log)
 @app.route("/email/status")
 def email_status():
     with email_lock:
@@ -308,9 +324,42 @@ def email_status():
             returncode=EMAIL_JOB["returncode"],
             log=EMAIL_JOB["log"][-300:],
         )
-# ------------------------------------------------------------------ #
+@app.route("/followup/preview")
+def followup_preview():
+    try:
+        info = preview_first(campaign=CAMPAIGN_FOLLOWUP)
+    except Exception as exc:
+        return jsonify(error=str(exc)), 400
+    if info is None:
+        return jsonify(
+            error="No one is eligible for a follow-up yet (they must have received the first email already)."
+        ), 400
+    return jsonify(ok=True, **info)
+@app.route("/followup/test", methods=["POST"])
+def followup_test():
+    test_to = request.form.get("test_to", "").strip()
+    if not EMAIL_RE.match(test_to):
+        return jsonify(error="Enter a valid tester email address."), 400
+    return _start_email(test_to=test_to, limit=None, campaign=CAMPAIGN_FOLLOWUP,
+                         job=FOLLOWUP_JOB, lock=followup_lock, log=_followup_log)
+@app.route("/followup/send", methods=["POST"])
+def followup_send():
+    raw = request.form.get("limit", "").strip()
+    if raw and (not raw.isdigit() or int(raw) < 1):
+        return jsonify(error="Limit must be a positive number."), 400
+    return _start_email(test_to=None, limit=int(raw) if raw else None, campaign=CAMPAIGN_FOLLOWUP,
+                         job=FOLLOWUP_JOB, lock=followup_lock, log=_followup_log)
+@app.route("/followup/status")
+def followup_status():
+    with followup_lock:
+        return jsonify(
+            running=FOLLOWUP_JOB["running"],
+            returncode=FOLLOWUP_JOB["returncode"],
+            log=FOLLOWUP_JOB["log"][-300:],
+        )
+# --------------------------------------------------------------------- #
 # Email search (Hunter.io)
-# ------------------------------------------------------------------ #
+# --------------------------------------------------------------------- #
 HUNTER_JOB = {"running": False, "log": [], "returncode": None}
 hunter_lock = threading.Lock()
 def _hunter_log(line: str) -> None:

@@ -9,11 +9,10 @@ import sqlite3
 import time
 import requests
 from dotenv import load_dotenv
-from config import BASE, DB_PATH, TABLE_NAME
+from config import BASE, DB_PATH, TABLE_NAME, CLIENT_METADATA_TABLE
 load_dotenv(BASE / ".env")
 HUNTER_URL = "https://api.hunter.io/v2/email-finder"
 HUNTER_API_KEY = os.getenv("HUNTER_API_KEY", "").strip()
-CLIENT_METADATA_TABLE = "client_metadata"
 HUNTER_TABLE = "hunter_lookups"
 DELAY_SEC = 1.0  # pause between API calls to stay under rate limits
 class HunterStop(Exception):
