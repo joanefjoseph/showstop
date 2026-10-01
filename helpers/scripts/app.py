@@ -5,6 +5,7 @@ import sqlite3
 import subprocess
 import sys
 import threading
+import tempfile
 from pathlib import Path
 from flask import Flask, Response, jsonify, render_template, request, url_for
 from linkedin_people_scraper import clean_profile_url, init_sqlite
@@ -21,6 +22,7 @@ from send_emails import (
     send_campaign,
 )
 SCRAPER = BASE / "linkedin_people_scraper.py"
+DB_TOOL = BASE / "db_tool.py"
 PER_PAGE = 25
 CSV_FIELDS = ("first_name", "last_name", "job_title", "email")
 REQUIRED_CSV_FIELDS = ("company_name", "linkedin_profile_url")
@@ -245,6 +247,83 @@ def download_csv():
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 # --------------------------------------------------------------------- #
+# Database tool (db_tool.py), driven from the UI
+# --------------------------------------------------------------------- #
+def _run_db_tool(args: list[str]) -> tuple[bool, str]:
+    """Run db_tool.py as a subprocess and capture its output."""
+    cmd = [sys.executable, "-u", str(DB_TOOL), *args]
+    try:
+        proc = subprocess.run(cmd, cwd=BASE, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        return False, "db_tool.py timed out."
+    output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+    return proc.returncode == 0, output
+@app.route("/dbtool/remove", methods=["POST"])
+def dbtool_remove():
+    table = request.form.get("table", "").strip()
+    columns = [c.strip() for c in request.form.getlist("column") if c.strip()]
+    keys = request.form.getlist("key")
+    dry_run = request.form.get("dry_run") == "1"
+    if not table:
+        return jsonify(error="Table name is required."), 400
+    if not columns or len(columns) != len(keys):
+        return jsonify(error="Provide at least one column/key pair, with a key for each column."), 400
+    args = ["--remove", "--table", table, "--yes"]
+    for col, key in zip(columns, keys):
+        args += ["--column", col, "--key", key]
+    if dry_run:
+        args.append("--dry-run")
+    ok, output = _run_db_tool(args)
+    if not ok:
+        return jsonify(error=output or "db_tool.py failed."), 400
+    return jsonify(ok=True, log=output)
+@app.route("/dbtool/upsert", methods=["POST"])
+def dbtool_upsert():
+    table = request.form.get("table", "").strip()
+    cols = request.form.getlist("set_col")
+    vals = request.form.getlist("set_val")
+    dry_run = request.form.get("dry_run") == "1"
+    if not table:
+        return jsonify(error="Table name is required."), 400
+    pairs = [(c.strip(), v) for c, v in zip(cols, vals) if c.strip()]
+    if not pairs:
+        return jsonify(error="Provide at least one column/value pair."), 400
+    args = ["--upsert", "--table", table]
+    for col, val in pairs:
+        args += ["--set", f"{col}={val}"]
+    if dry_run:
+        args.append("--dry-run")
+    ok, output = _run_db_tool(args)
+    if not ok:
+        return jsonify(error=output or "db_tool.py failed."), 400
+    return jsonify(ok=True, log=output)
+@app.route("/dbtool/upsert_csv", methods=["POST"])
+def dbtool_upsert_csv():
+    table = request.form.get("table", "").strip()
+    dry_run = request.form.get("dry_run") == "1"
+    file = request.files.get("csv_file")
+    if not table:
+        return jsonify(error="Table name is required."), 400
+    if not file or not file.filename:
+        return jsonify(error="Please choose a CSV file."), 400
+    tmp_dir = Path(tempfile.mkdtemp(prefix="dbtool_"))
+    tmp_path = tmp_dir / "upsert.csv"
+    file.save(tmp_path)
+    try:
+        args = ["--upsert-csv", str(tmp_path), "--table", table]
+        if dry_run:
+            args.append("--dry-run")
+        ok, output = _run_db_tool(args)
+    finally:
+        try:
+            tmp_path.unlink(missing_ok=True)
+            tmp_dir.rmdir()
+        except OSError:
+            pass
+    if not ok:
+        return jsonify(error=output or "db_tool.py failed."), 400
+    return jsonify(ok=True, log=output)
+# --------------------------------------------------------------------- #
 # Email outreach (initial + follow-up campaigns)
 # --------------------------------------------------------------------- #
 EMAIL_JOB = {"running": False, "log": [], "returncode": None}
@@ -287,7 +366,8 @@ def _start_email(test_to: str | None, limit: int | None, campaign: str,
         no_rows_msg = (
             "No recipients to email."
             if campaign == CAMPAIGN_INITIAL
-            else "No one is eligible for a follow-up yet (they must have received the first email already)."
+            else "No one is eligible for a follow-up yet (they must have received "
+                 "the first email more than 48 hours ago)."
         )
         return jsonify(error=no_rows_msg), 400
     threading.Thread(target=_email_worker, args=(rows, test_to, campaign, job, lock, log),
@@ -332,7 +412,8 @@ def followup_preview():
         return jsonify(error=str(exc)), 400
     if info is None:
         return jsonify(
-            error="No one is eligible for a follow-up yet (they must have received the first email already)."
+            error="No one is eligible for a follow-up yet (they must have received "
+                  "the first email more than 48 hours ago)."
         ), 400
     return jsonify(ok=True, **info)
 @app.route("/followup/test", methods=["POST"])

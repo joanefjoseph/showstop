@@ -29,7 +29,7 @@ LOWERCASE_COLUMNS = {
 # Timestamps filled in automatically when not supplied
 DEFAULT_VALUES = {
     "hunter_lookups": {"queried_at": lambda: _utc_now()},
-    "sent_emails": {"timestamp": lambda: _utc_now()},
+    "sent_emails": {"timestamp": lambda: datetime.now().isoformat(timespec="seconds")},
 }
 def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")

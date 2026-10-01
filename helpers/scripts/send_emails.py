@@ -21,7 +21,7 @@ import sqlite3
 import ssl
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 from pathlib import Path
@@ -50,6 +50,7 @@ SAVE_TO_SENT_FOLDER = True           # SMTP sends don't show up in "Sent" otherw
 SENT_FOLDER = "Sent"
 MIN_DELAY_SEC = 45                   # random pause between emails
 MAX_DELAY_SEC = 90
+FOLLOWUP_DELAY_HOURS = 48        # follow-up only goes to people whose initial email is at least this old
 REQUIRED_COLUMNS = {"company_name", "first_name", "last_name", "email"}
 REQUIRED_METADATA_COLUMNS = {"company_name", "email_name"}   # client_metadata
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -306,19 +307,47 @@ def init_sent_table() -> None:
         conn.commit()
     finally:
         conn.close()
-def load_sent_emails(campaign: str, status: str = "sent") -> set[str]:
-    """Emails with a given status for a given campaign (lowercased)."""
+def _parse_ts(raw: str) -> datetime | None:
+    """Parse a sent_emails.timestamp value into a naive local datetime."""
+    try:
+        ts = datetime.fromisoformat(raw.strip())
+    except (TypeError, ValueError):
+        return None
+    if ts.tzinfo is not None:                  # normalise aware -> naive local
+        ts = ts.astimezone().replace(tzinfo=None)
+    return ts
+def load_sent_emails(campaign: str, status: str = "sent",
+                     sent_before: datetime | None = None,
+                     log=print) -> set[str]:
+    """
+    Emails (lowercased) with a given status for a given campaign.
+    If `sent_before` is given, only emails whose FIRST matching send happened
+    at or before that moment are returned (used for the 48 h follow-up gate).
+    """
     init_sent_table()
     conn = _connect()
     try:
         rows = conn.execute(
-            f"SELECT DISTINCT LOWER(email) AS email FROM {SENT_TABLE_NAME} "
-            f"WHERE campaign = ? AND status = ?",
+            f"SELECT LOWER(email) AS email, MAX(timestamp) AS first_ts "
+            f"FROM {SENT_TABLE_NAME} "
+            f"WHERE campaign = ? AND status = ? "
+            f"GROUP BY LOWER(email)",
             (campaign, status),
         ).fetchall()
     finally:
         conn.close()
-    return {r["email"] for r in rows}
+    if sent_before is None:
+        return {r["email"] for r in rows}
+    out: set[str] = set()
+    for r in rows:
+        ts = _parse_ts(r["first_ts"])
+        if ts is None:
+            log(f"  [warn] unreadable timestamp {r['first_ts']!r} for {r['email']}; "
+                f"not eligible yet")
+            continue
+        if ts <= sent_before:
+            out.add(r["email"])
+    return out
 def log_result(email: str, status: str, detail: str = "", campaign: str = CAMPAIGN_INITIAL) -> None:
     init_sent_table()
     conn = _connect()
@@ -350,31 +379,37 @@ def require_password() -> str:
         raise RuntimeError("EMAIL_PASSWORD is not set in your .env file.")
     return EMAIL_PASSWORD
 # -------------------------- PUBLIC API --------------------------------
-def get_recipients(limit: int | None = None, test_to: str | None = None,
-                    campaign: str = CAMPAIGN_INITIAL, log=print) -> list[dict]:
+def filter_eligible(rows: list[dict], campaign: str, log=print) -> list[dict]:
     """
-    Mirrors the original CLI behavior, generalized to any number of
-    sequential campaigns:
-      - test mode: first `limit` (default 3) rows, ignoring the sent log.
-      - send mode, first campaign in the sequence: rows not yet sent that email.
-      - send mode, any later campaign: rows that completed the *previous*
-        campaign in CAMPAIGN_SEQUENCE and have NOT yet gotten this one,
-        optionally capped at `limit`.
+    Keep only rows eligible for `campaign`:
+      - first campaign in CAMPAIGN_SEQUENCE: not yet sent this campaign.
+      - any later campaign: received the previous campaign at least
+        FOLLOWUP_DELAY_HOURS ago AND not yet sent this campaign.
+    """
+    idx = CAMPAIGN_SEQUENCE.index(campaign)
+    already_got_this_one = load_sent_emails(campaign, "sent", log=log)
+    if idx == 0:
+        return [r for r in rows if r["email"].lower() not in already_got_this_one]
+    prerequisite = CAMPAIGN_SEQUENCE[idx - 1]
+    cutoff = datetime.now() - timedelta(hours=FOLLOWUP_DELAY_HOURS)
+    completed_prerequisite = load_sent_emails(prerequisite, "sent",
+                                              sent_before=cutoff, log=log)
+    log(f"{len(completed_prerequisite)} recipient(s) received '{prerequisite}' "
+        f"more than {FOLLOWUP_DELAY_HOURS}h ago.")
+    return [r for r in rows
+            if r["email"].lower() in completed_prerequisite
+            and r["email"].lower() not in already_got_this_one]
+def get_recipients(limit: int | None = None, test_to: str | None = None,
+                   campaign: str = CAMPAIGN_INITIAL, log=print) -> list[dict]:
+    """
+    Recipient list for a campaign (see filter_eligible for the rules).
+      - test mode: the first `limit` (default 3) ELIGIBLE rows, so the test
+        emails show exactly what would go out for real.
+      - send mode: all eligible rows, optionally capped at `limit`.
     """
     if campaign not in CAMPAIGN_SEQUENCE:
         raise ValueError(f"Unknown campaign {campaign!r}; must be one of {CAMPAIGN_SEQUENCE}")
-    rows = load_rows_sqlite(DB_PATH, log)
-    if not test_to:
-        idx = CAMPAIGN_SEQUENCE.index(campaign)
-        not_yet_this_one = load_sent_emails(campaign, "sent")
-        if idx == 0:
-            rows = [r for r in rows if r["email"].lower() not in not_yet_this_one]
-        else:
-            prerequisite = CAMPAIGN_SEQUENCE[idx - 1]
-            completed_prerequisite = load_sent_emails(prerequisite, "sent")
-            rows = [r for r in rows
-                    if r["email"].lower() in completed_prerequisite
-                    and r["email"].lower() not in not_yet_this_one]
+    rows = filter_eligible(load_rows_sqlite(DB_PATH, log), campaign, log)
     if test_to:
         rows = rows[: limit or 3]
     elif limit:
