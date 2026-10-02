@@ -411,6 +411,71 @@ def dbtool_upsert_csv():
         return jsonify(error=output or "db_tool.py failed."), 400
     return jsonify(ok=True, log=output)
 # --------------------------------------------------------------------- #
+# Table viewer (read-only browse of any table in clients.db)
+# --------------------------------------------------------------------- #
+VIEWER_PER_PAGE = 25
+
+
+def _quote_ident(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _list_tables(con: sqlite3.Connection) -> list[str]:
+    return [r[0] for r in con.execute(
+        "SELECT name FROM sqlite_master "
+        "WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    )]
+
+
+@app.route("/tables")
+def tables():
+    if not DB_PATH.exists():
+        return jsonify(tables=[])
+    con = sqlite3.connect(DB_PATH)
+    try:
+        names = _list_tables(con)
+    finally:
+        con.close()
+    return jsonify(tables=names)
+
+
+@app.route("/table/<name>")
+def table_page(name):
+    page = request.args.get("page", 1, type=int)
+    sort = request.args.get("sort", "")
+    direction = "desc" if request.args.get("dir", "asc").lower() == "desc" else "asc"
+    if not DB_PATH.exists():
+        return jsonify(error="Database not found."), 404
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    try:
+        if name not in _list_tables(con):
+            return jsonify(error=f"Unknown table '{name}'."), 404
+        tbl = _quote_ident(name)
+        columns = [r["name"] for r in con.execute(f"PRAGMA table_info({tbl})")]
+        total = con.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
+        pages = max(1, math.ceil(total / VIEWER_PER_PAGE))
+        page = min(max(1, page), pages)
+        offset = (page - 1) * VIEWER_PER_PAGE
+        if sort in columns:
+            order = f"ORDER BY {_quote_ident(sort)} COLLATE NOCASE {direction.upper()}, rowid"
+        else:
+            sort = ""
+            order = "ORDER BY rowid"
+        rows = con.execute(
+            f"SELECT rowid AS __rowid, * FROM {tbl} {order} LIMIT ? OFFSET ?",
+            (VIEWER_PER_PAGE, offset),
+        ).fetchall()
+    except sqlite3.OperationalError as exc:      # e.g. WITHOUT ROWID tables
+        return jsonify(error=f"Could not read table: {exc}"), 400
+    finally:
+        con.close()
+    return jsonify(
+        table=name, columns=columns, sort=sort, dir=direction,
+        page=page, pages=pages, total=total, per_page=VIEWER_PER_PAGE,
+        rows=[[r[c] for c in columns] for r in rows],
+    )
+# --------------------------------------------------------------------- #
 # Email outreach (initial + follow-up campaigns)
 # --------------------------------------------------------------------- #
 EMAIL_JOB = {"running": False, "log": [], "returncode": None}

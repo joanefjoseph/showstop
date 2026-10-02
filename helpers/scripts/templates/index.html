@@ -48,6 +48,14 @@
     th a.sort:hover { text-decoration: underline; }
     th a.sort .arrow { font-size: .75em; color: #0a66c2; margin-left: .2rem; }
     th.sorted { background: #e8f0fb; }
+    #viewer-table-wrap { overflow-x: auto; }
+    #viewer-table th { cursor: pointer; user-select: none; white-space: nowrap; }
+    #viewer-table th.sorted { background: #e8f0fb; }
+    #viewer-table th .arrow { font-size: .75em; color: #0a66c2; margin-left: .2rem; }
+    #viewer-table td { max-width: 360px; overflow-wrap: anywhere; }
+    #viewer-table td.null { color: #aaa; font-style: italic; }
+    .pagination button { padding: .3rem .6rem; font-size: .9rem; }
+    .pagination button:disabled { background: #ccc; cursor: default; }
   </style>
 </head>
 <body>
@@ -265,6 +273,26 @@
     </div>
     <div id="upsert-csv-message" class="muted"></div>
     <pre id="upsert-csv-log"></pre>
+  </div>
+  <h2>Table viewer</h2>
+  <p class="muted">Read-only view of any table in <code>clients.db</code>, 25 rows per page. Click a column name to sort.</p>
+  <div class="panel">
+    <div class="form-row">
+      <label>Table:
+        <select id="viewer-select" style="padding:.5rem; font-size:1rem; margin-left:.4rem;">
+          <option value="">— choose a table —</option>
+        </select>
+      </label>
+      <button type="button" id="viewer-refresh" class="secondary">Refresh</button>
+      <span id="viewer-count" class="muted"></span>
+    </div>
+    <div id="viewer-message" class="muted"></div>
+    <div id="viewer-table-wrap"></div>
+    <div id="viewer-pagination" class="pagination" style="display:none;">
+      <button type="button" id="viewer-prev">&larr; Previous</button>
+      <span id="viewer-page-label"></span>
+      <button type="button" id="viewer-next">Next &rarr;</button>
+    </div>
   </div>
   <script>
     const form = document.getElementById('scrape-form');
@@ -619,6 +647,118 @@
       log.textContent = data.log || data.error || '';
       msg.textContent = res.ok ? 'Done.' : (data.error || 'Failed.');
     });
+    // --- Table viewer ---
+    (() => {
+      const select   = document.getElementById('viewer-select');
+      const refresh  = document.getElementById('viewer-refresh');
+      const wrap     = document.getElementById('viewer-table-wrap');
+      const msg      = document.getElementById('viewer-message');
+      const count    = document.getElementById('viewer-count');
+      const pagerEl  = document.getElementById('viewer-pagination');
+      const prevBtn  = document.getElementById('viewer-prev');
+      const nextBtn  = document.getElementById('viewer-next');
+      const pageLbl  = document.getElementById('viewer-page-label');
+      const state = { table: '', page: 1, pages: 1, sort: '', dir: 'asc' };
+
+      async function loadTableList() {
+        const res = await fetch('/tables');
+        const data = await res.json();
+        select.innerHTML = '<option value="">— choose a table —</option>' +
+          data.tables.map(t => `<option value="${t}">${t}</option>`).join('');
+      }
+
+      function cell(value) {
+        const td = document.createElement('td');
+        if (value === null || value === undefined) {
+          td.textContent = 'NULL';
+          td.className = 'null';
+        } else {
+          td.textContent = String(value);
+        }
+        return td;
+      }
+
+      function render(data) {
+        const table = document.createElement('table');
+        table.id = 'viewer-table';
+        const thead = table.createTHead();
+        const hr = thead.insertRow();
+        data.columns.forEach(col => {
+          const th = document.createElement('th');
+          const active = data.sort === col;
+          th.textContent = col;
+          if (active) {
+            th.classList.add('sorted');
+            const arrow = document.createElement('span');
+            arrow.className = 'arrow';
+            arrow.textContent = data.dir === 'asc' ? '▲' : '▼';
+            th.appendChild(arrow);
+          }
+          th.title = `Sort by ${col}`;
+          th.addEventListener('click', () => {
+            state.dir = (state.sort === col && state.dir === 'asc') ? 'desc' : 'asc';
+            state.sort = col;
+            state.page = 1;
+            load();
+          });
+          hr.appendChild(th);
+        });
+        const tbody = table.createTBody();
+        data.rows.forEach(row => {
+          const tr = tbody.insertRow();
+          row.forEach(v => tr.appendChild(cell(v)));
+        });
+        wrap.innerHTML = '';
+        wrap.appendChild(table);
+
+        count.textContent = `(${data.total} row${data.total === 1 ? '' : 's'})`;
+        pageLbl.textContent = `Page ${data.page} of ${data.pages}`;
+        prevBtn.disabled = data.page <= 1;
+        nextBtn.disabled = data.page >= data.pages;
+        pagerEl.style.display = 'flex';
+        msg.textContent = data.total === 0 ? 'This table is empty.' : '';
+      }
+
+      async function load() {
+        if (!state.table) {
+          wrap.innerHTML = '';
+          pagerEl.style.display = 'none';
+          count.textContent = '';
+          msg.textContent = '';
+          return;
+        }
+        msg.textContent = 'Loading…';
+        const params = new URLSearchParams({
+          page: state.page, sort: state.sort, dir: state.dir,
+        });
+        const res = await fetch(`/table/${encodeURIComponent(state.table)}?${params}`);
+        const data = await res.json();
+        if (!res.ok) {
+          msg.textContent = data.error || 'Could not load table.';
+          wrap.innerHTML = '';
+          pagerEl.style.display = 'none';
+          return;
+        }
+        state.page = data.page;
+        state.pages = data.pages;
+        state.sort = data.sort;
+        state.dir = data.dir;
+        render(data);
+      }
+
+      select.addEventListener('change', () => {
+        state.table = select.value;
+        state.page = 1;
+        state.sort = '';
+        state.dir = 'asc';
+        load();
+      });
+      refresh.addEventListener('click', async () => { await loadTableList(); select.value = state.table; load(); });
+      prevBtn.addEventListener('click', () => { if (state.page > 1) { state.page--; load(); } });
+      nextBtn.addEventListener('click', () => { if (state.page < state.pages) { state.page++; load(); } });
+
+      loadTableList();
+    })();
   </script>
 </body>
 </html>
