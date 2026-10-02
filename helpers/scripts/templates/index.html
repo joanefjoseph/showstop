@@ -35,10 +35,19 @@
     .toolbar form { display: flex; gap: .5rem; align-items: center; }
     .toolbar input[type=file] { font-size: .9rem; }
     .toolbar a button { background: #2c7a2c; }
+    .dm-btn { padding: .3rem .55rem; font-size: .8rem; white-space: nowrap; }
+    .dm-btn.copied { background: #2e7d32; }
+    .dm-btn.sent, .dm-btn.sent:hover { background: #ccc; color: #666; cursor: not-allowed; }
+    td.dm { text-align: center; }
+    #dm-message { margin-top: .5rem; font-weight: 600; }
     #csv-message { margin-top: .5rem; font-weight: 600; }
     #email-log, #followup-log, #hunter-log,
     #remove-log, #upsert-log, #upsert-csv-log { display: none; margin-top: 1rem; background: #111; color: #cfe; font-family: monospace; font-size: .85rem; height: 220px; overflow-y: auto; padding: .75rem; border-radius: 6px; white-space: pre-wrap; }
     #preview-frame, #followup-preview-frame { width: 100%; height: 400px; border: 1px solid #ddd; background: #fff; margin-top: 1rem; border-radius: 6px; }
+    th a.sort { color: inherit; text-decoration: none; display: inline-block; white-space: nowrap; }
+    th a.sort:hover { text-decoration: underline; }
+    th a.sort .arrow { font-size: .75em; color: #0a66c2; margin-left: .2rem; }
+    th.sorted { background: #e8f0fb; }
   </style>
 </head>
 <body>
@@ -61,9 +70,11 @@
   <h2>Saved People <span class="muted">({{ total }} total)</span></h2>
   <form method="get" action="{{ url_for('index') }}" class="filter-form">
     <input type="text" name="q" value="{{ q }}" placeholder="Filter by company name (e.g. weverse)">
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ dir }}">
     <button type="submit">Filter</button>
     {% if q %}
-      <a href="{{ url_for('index') }}" class="clear-link">Clear</a>
+      <a href="{{ url_for('index', sort=sort, dir=dir) }}" class="clear-link">Clear</a>
     {% endif %}
   </form>
   <div class="toolbar">
@@ -71,21 +82,35 @@
       <input type="file" id="csv_file" name="csv_file" accept=".csv" required>
       <button type="submit">Upload CSV</button>
     </form>
-    <a href="{{ url_for('download_csv', q=q) }}">
+    <a href="{{ url_for('download_csv', q=q, sort=sort, dir=dir) }}">
       <button type="button">Download CSV</button>
     </a>
   </div>
   <div id="csv-message"></div>
   {% if rows %}
+  {% macro sort_th(col, label) -%}
+    {%- set active = (sort == col) -%}
+    {%- set next_dir = 'desc' if (active and dir == 'asc') else 'asc' -%}
+    <th class="{{ 'sorted' if active else '' }}">
+      <a class="sort" href="{{ url_for('index', q=q, sort=col, dir=next_dir) }}"
+        title="Sort by {{ label }} ({{ 'descending' if next_dir == 'desc' else 'ascending' }})">
+        {{ label }}
+        {%- if active %}<span class="arrow">{{ '▲' if dir == 'asc' else '▼' }}</span>{% endif -%}
+      </a>
+    </th>
+  {%- endmacro %}
   <table>
     <thead>
       <tr>
-        <th>Company</th>
-        <th>First name</th>
-        <th>Last name</th>
-        <th>Job title</th>
-        <th>LinkedIn profile</th>
-        <th>Email</th>
+        {{ sort_th('company_name', 'Company') }}
+        {{ sort_th('first_name', 'First name') }}
+        {{ sort_th('last_name', 'Last name') }}
+        {{ sort_th('job_title', 'Job title') }}
+        {{ sort_th('linkedin_profile_url', 'LinkedIn profile') }}
+        {{ sort_th('email', 'Email') }}
+        {% for key in dm_keys %}
+          <th>{{ dm_labels[key] }}</th>
+        {% endfor %}
       </tr>
     </thead>
     <tbody>
@@ -100,20 +125,34 @@
             class="connect-link" data-first-name="{{ r.first_name or '' }}">{{ r.linkedin_profile_url }}</a>
         </td>
         <td>{{ r.email or '' }}</td>
+        {% for key in dm_keys %}
+          {% set was_sent = key in r.sent_dms %}
+          <td class="dm">
+            <button type="button"
+                    class="dm-btn{{ ' sent' if was_sent else '' }}"
+                    {% if was_sent %}disabled title="{{ dm_labels[key] }} already sent to this profile"{% endif %}
+                    data-url="{{ r.linkedin_profile_url }}"
+                    data-dm="{{ key }}"
+                    data-label="{{ dm_labels[key] }}"
+                    data-first-name="{{ r.first_name or '' }}"
+                    data-text="{{ r.dms[key] }}">{{ 'Sent ✓' if was_sent else 'Copy & open' }}</button>
+          </td>
+        {% endfor %}
       </tr>
       {% endfor %}
     </tbody>
   </table>
   <div id="connect-note-message" class="muted" style="margin-top:.5rem;"></div>
+  <div id="dm-message" class="muted"></div>
   <div class="pagination">
     {% if page > 1 %}
-      <a href="{{ url_for('index', page=page-1, q=q) }}">&larr; Previous</a>
+      <a href="{{ url_for('index', page=page-1, q=q, sort=sort, dir=dir) }}">&larr; Previous</a>
     {% else %}
       <span class="disabled">&larr; Previous</span>
     {% endif %}
     <span>Page {{ page }} of {{ pages }}</span>
     {% if page < pages %}
-      <a href="{{ url_for('index', page=page+1, q=q) }}">Next &rarr;</a>
+      <a href="{{ url_for('index', page=page+1, q=q, sort=sort, dir=dir) }}">Next &rarr;</a>
     {% else %}
       <span class="disabled">Next &rarr;</span>
     {% endif %}
@@ -318,6 +357,56 @@
         } catch (err) {
           if (connectMsg) connectMsg.textContent = 'Could not copy note to clipboard (clipboard permission denied).';
           console.warn('Clipboard copy failed:', err);
+        }
+      });
+    });
+    // --- LinkedIn DMs: copy the message, open the profile, then log it as sent ---
+    const dmMsg = document.getElementById('dm-message');
+    function markDmSent(btn, label) {
+      btn.disabled = true;
+      btn.classList.remove('copied');
+      btn.classList.add('sent');
+      btn.textContent = 'Sent ✓';
+      btn.title = `${label} already sent to this profile`;
+    }
+    document.querySelectorAll('button.dm-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (btn.disabled || btn.classList.contains('sent')) return;   // already sent: no-op
+        const { url, text, label, dm, firstName } = btn.dataset;
+        const who = firstName || 'this person';
+
+        // 1. Copy first (the clipboard API needs the page to still be focused).
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch (err) {
+          if (dmMsg) dmMsg.textContent = 'Could not copy the message to the clipboard (clipboard permission denied). Nothing was logged.';
+          console.warn('Clipboard copy failed:', err);
+          return;                                  // don't open or log if the copy failed
+        }
+
+        // 2. Open the profile.
+        window.open(url, '_blank', 'noopener');
+
+        // 3. Record the send and update the table in place.
+        btn.disabled = true;
+        btn.textContent = 'Logging…';
+        const body = new FormData();
+        body.append('linkedin_profile_url', url);
+        body.append('dm', dm);
+        try {
+          const res = await fetch('/dm/sent', { method: 'POST', body });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Could not log the DM.');
+          markDmSent(btn, label);
+          if (dmMsg) {
+            dmMsg.textContent = `${label} for ${who} copied to clipboard and marked as sent — paste it into the LinkedIn message box.`;
+            setTimeout(() => { dmMsg.textContent = ''; }, 6000);
+          }
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = 'Copy & open';
+          if (dmMsg) dmMsg.textContent = `Message copied, but it was NOT logged as sent: ${err.message}`;
+          console.warn('DM log failed:', err);
         }
       });
     });

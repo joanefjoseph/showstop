@@ -22,17 +22,11 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from config import DB_PATH
+from db import init_db
 # Columns whose values are stored lowercase (matches how hunter.py writes them)
 LOWERCASE_COLUMNS = {
     "hunter_lookups": {"domain", "first_name", "last_name"},
 }
-# Timestamps filled in automatically when not supplied
-DEFAULT_VALUES = {
-    "hunter_lookups": {"queried_at": lambda: _utc_now()},
-    "sent_emails": {"timestamp": lambda: datetime.now().isoformat(timespec="seconds")},
-}
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 # ------------------------- HELPERS -------------------------
 def quote(identifier: str) -> str:
     """Quote a table/column name so it's safe to put into SQL."""
@@ -40,6 +34,7 @@ def quote(identifier: str) -> str:
 def connect(db_path: Path) -> sqlite3.Connection:
     if not Path(db_path).is_file():
         sys.exit(f"Database not found: {db_path}")
+    init_db(db_path)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
@@ -78,9 +73,6 @@ def normalize(table: str, row: dict) -> dict:
         elif col in lower:
             val = val.lower()
         out[col] = val
-    for col, factory in DEFAULT_VALUES.get(table, {}).items():
-        if out.get(col) is None:
-            out[col] = factory()
     return out
 # ------------------------- REMOVE -------------------------
 def remove_rows(args: argparse.Namespace) -> None:

@@ -21,12 +21,13 @@ import sqlite3
 import ssl
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 from pathlib import Path
 from dotenv import load_dotenv
 from config import BASE, DB_PATH, TABLE_NAME, SENT_TABLE_NAME, METADATA_TABLE_NAME
+from db import connect as _connect, init_db
 # -------------------------- LOAD .env -------------------------------
 load_dotenv(BASE / ".env")
 def require_env(name: str) -> str:
@@ -275,38 +276,9 @@ def load_rows_sqlite(db_path: Path = DB_PATH, log=print) -> list[dict]:
         conn.close()
     return clean_records(records, log)
 # -------------------------- SEND LOG ----------------------------------
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
 def init_sent_table() -> None:
-    """Create the sent_emails table if it doesn't exist yet (idempotent)."""
-    conn = _connect()
-    try:
-        conn.execute(f"""
-            CREATE TABLE IF NOT EXISTS {SENT_TABLE_NAME} (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp   TEXT NOT NULL,
-                email       TEXT NOT NULL,
-                status      TEXT NOT NULL,
-                detail      TEXT,
-                campaign    TEXT NOT NULL DEFAULT 'initial'
-            )
-        """)
-        # Migration safety: older databases may already have this table
-        # from before the `campaign` column existed.
-        cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({SENT_TABLE_NAME})")}
-        if "campaign" not in cols:
-            conn.execute(
-                f"ALTER TABLE {SENT_TABLE_NAME} ADD COLUMN campaign TEXT NOT NULL DEFAULT 'initial'"
-            )
-        conn.execute(f"""
-            CREATE INDEX IF NOT EXISTS idx_{SENT_TABLE_NAME}_email_status
-            ON {SENT_TABLE_NAME} (email, status, campaign)
-        """)
-        conn.commit()
-    finally:
-        conn.close()
+    """Tables are defined in schema.sql (incl. the campaign-column migration)."""
+    init_db()
 def _parse_ts(raw: str) -> datetime | None:
     """Parse a sent_emails.timestamp value into a naive local datetime."""
     try:
@@ -355,7 +327,7 @@ def log_result(email: str, status: str, detail: str = "", campaign: str = CAMPAI
         conn.execute(
             f"INSERT INTO {SENT_TABLE_NAME} (timestamp, email, status, detail, campaign) "
             f"VALUES (?, ?, ?, ?, ?)",
-            (datetime.now().isoformat(timespec="seconds"), email, status, detail, campaign),
+            (datetime.now(timezone.utc).isoformat(timespec="seconds"), email, status, detail, campaign),
         )
         conn.commit()
     finally:

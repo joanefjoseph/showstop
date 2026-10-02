@@ -9,11 +9,12 @@ import sqlite3
 import time
 import requests
 from dotenv import load_dotenv
-from config import BASE, DB_PATH, TABLE_NAME, METADATA_TABLE_NAME
+from config import BASE, DB_PATH, TABLE_NAME, METADATA_TABLE_NAME, HUNTER_TABLE_NAME
+from db import connect as _connect, init_db
 load_dotenv(BASE / ".env")
 HUNTER_URL = "https://api.hunter.io/v2/email-finder"
 HUNTER_API_KEY = os.getenv("HUNTER_API_KEY", "").strip()
-HUNTER_TABLE = "hunter_lookups"
+HUNTER_TABLE = HUNTER_TABLE_NAME
 DELAY_SEC = 1.0  # pause between API calls to stay under rate limits
 class HunterStop(Exception):
     """Raised when Hunter rejects the key or credits, so the run must stop."""
@@ -21,28 +22,9 @@ def require_key() -> str:
     if not HUNTER_API_KEY:
         raise RuntimeError("HUNTER_API_KEY is not set in your .env file.")
     return HUNTER_API_KEY
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
 def init_lookup_table() -> None:
-    """Create the lookup cache table if it doesn't exist yet (idempotent)."""
-    conn = _connect()
-    try:
-        conn.execute(f"""
-            CREATE TABLE IF NOT EXISTS {HUNTER_TABLE} (
-                domain      TEXT NOT NULL,
-                first_name  TEXT NOT NULL,
-                last_name   TEXT NOT NULL,
-                email       TEXT,            -- NULL when Hunter found nothing
-                score       INTEGER,
-                queried_at  TEXT NOT NULL,
-                PRIMARY KEY (domain, first_name, last_name)
-            )
-        """)
-        conn.commit()
-    finally:
-        conn.close()
+    """Tables are defined in schema.sql."""
+    init_db()
 def _query_hunter(first: str, last: str, domain: str) -> tuple[bool, str | None, int | None]:
     """
     Returns (ok, email, score).

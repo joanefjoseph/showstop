@@ -8,9 +8,11 @@ import threading
 import tempfile
 from pathlib import Path
 from flask import Flask, Response, jsonify, render_template, request, url_for
-from linkedin_people_scraper import clean_profile_url, init_sqlite
+from linkedin_people_scraper import clean_profile_url
+from db import init_db
+from linkedin_dms import DM_SEQUENCE, DMS, render_all, load_sent_dms, log_dm_result
 BASE = Path(__file__).resolve().parent
-from config import DB_PATH
+from config import DB_PATH, METADATA_TABLE_NAME
 from hunter import fill_missing_emails, require_key
 from send_emails import (
     CAMPAIGN_INITIAL,
@@ -26,7 +28,19 @@ DB_TOOL = BASE / "db_tool.py"
 PER_PAGE = 25
 CSV_FIELDS = ("first_name", "last_name", "job_title", "email")
 REQUIRED_CSV_FIELDS = ("company_name", "linkedin_profile_url")
+# Columns the UI may sort on -> SQL expression (prefix "e." so it works with the join)
+SORTABLE_COLUMNS = {
+    "company_name": "e.company_name",
+    "first_name": "e.first_name",
+    "last_name": "e.last_name",
+    "job_title": "e.job_title",
+    "linkedin_profile_url": "e.linkedin_profile_url",
+    "email": "e.email",
+}
+DEFAULT_SORT = "company_name"
+DEFAULT_DIR = "asc"
 app = Flask(__name__)
+init_db()                      # make sure clients.db matches schema.sql on startup
 # Single shared scrape job (only one browser session at a time).
 job = {"proc": None, "running": False, "log": [], "returncode": None}
 job_lock = threading.Lock()
@@ -36,23 +50,48 @@ job_lock = threading.Lock()
 def _escape_like(text: str) -> str:
     """Escape LIKE wildcards so the search is a literal substring match."""
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-def fetch_page(page: int, company_filter: str = "") -> tuple[list[dict], int, int]:
+def _normalize_sort(sort: str, direction: str) -> tuple[str, str]:
+    """Clamp user-supplied sort params to known-safe values."""
+    sort = sort if sort in SORTABLE_COLUMNS else DEFAULT_SORT
+    direction = "desc" if str(direction).lower() == "desc" else "asc"
+    return sort, direction
+def _order_clause(sort: str, direction: str) -> str:
+    """
+    ORDER BY for a validated (sort, direction). Blank/NULL values always sink
+    to the bottom regardless of direction, comparisons are case-insensitive,
+    and company/last/first name act as tie-breakers so paging is stable.
+    """
+    col = SORTABLE_COLUMNS[sort]
+    d = direction.upper()
+    parts = [f"({col} IS NULL OR {col} = '')", f"{col} COLLATE NOCASE {d}"]
+    for tiebreak in ("e.company_name", "e.last_name", "e.first_name"):
+        if tiebreak != col:
+            parts.append(f"{tiebreak} COLLATE NOCASE ASC")
+    return "ORDER BY " + ", ".join(parts)
+def _table_exists(con: sqlite3.Connection, name: str) -> bool:
+    return con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+    ).fetchone() is not None
+def fetch_page(page: int, company_filter: str = "",
+               sort: str = DEFAULT_SORT, direction: str = DEFAULT_DIR) -> tuple[list[dict], int, int]:
     """
     Return (rows, total_matching_rows, clamped_page) for the requested page,
     optionally limited to rows whose company_name contains `company_filter`.
+    Each row also gets `email_name` (from client_metadata) and `dms`, a dict
+    of {dm_key: clipboard-ready LinkedIn message text}.
     """
     if not DB_PATH.exists():
         return [], 0, 1
     where = ""
     params: list = []
     if company_filter:
-        where = "WHERE company_name LIKE ? ESCAPE '\\'"
+        where = "WHERE e.company_name LIKE ? ESCAPE '\\'"
         params.append(f"%{_escape_like(company_filter)}%")
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     try:
         total = con.execute(
-            f"SELECT COUNT(*) FROM employees {where}", params
+            f"SELECT COUNT(*) FROM employees e {where}", params
         ).fetchone()[0]
     except sqlite3.OperationalError:  # table not created yet
         con.close()
@@ -60,17 +99,35 @@ def fetch_page(page: int, company_filter: str = "") -> tuple[list[dict], int, in
     pages = max(1, math.ceil(total / PER_PAGE))
     page = min(max(1, page), pages)
     offset = (page - 1) * PER_PAGE
+    # client_metadata is optional for this view; join it only if it exists.
+    if _table_exists(con, METADATA_TABLE_NAME):
+        email_name_col = "m.email_name"
+        join = f"LEFT JOIN {METADATA_TABLE_NAME} m ON m.company_name = e.company_name"
+    else:
+        email_name_col = "NULL AS email_name"
+        join = ""
+    sort, direction = _normalize_sort(sort, direction)
     rows = con.execute(
-        f"""SELECT company_name, first_name, last_name, job_title,
-                   linkedin_profile_url, email
-            FROM employees
+        f"""SELECT e.company_name, e.first_name, e.last_name, e.job_title,
+                   e.linkedin_profile_url, e.email, {email_name_col}
+            FROM employees e
+            {join}
             {where}
-            ORDER BY company_name, last_name, first_name
+            {_order_clause(sort, direction)}
             LIMIT ? OFFSET ?""",
         [*params, PER_PAGE, offset],
     ).fetchall()
     con.close()
-    return [dict(r) for r in rows], total, page
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["dms"] = render_all(d)
+        out.append(d)
+    # Which DMs have already gone to the profiles on this page?
+    sent = load_sent_dms([d["linkedin_profile_url"] for d in out])
+    for d in out:
+        d["sent_dms"] = sent.get(d["linkedin_profile_url"], set())
+    return out, total, page
 # --------------------------------------------------------------------- #
 # Scrape job management
 # --------------------------------------------------------------------- #
@@ -87,7 +144,11 @@ def _reader(proc: subprocess.Popen) -> None:
 def index():
     page = request.args.get("page", 1, type=int)
     q = request.args.get("q", "").strip()
-    rows, total, page = fetch_page(page, q)
+    sort, direction = _normalize_sort(
+        request.args.get("sort", DEFAULT_SORT),
+        request.args.get("dir", DEFAULT_DIR),
+    )
+    rows, total, page = fetch_page(page, q, sort, direction)
     pages = max(1, math.ceil(total / PER_PAGE))
     return render_template(
         "index.html",
@@ -96,6 +157,11 @@ def index():
         page=page,
         pages=pages,
         q=q,
+        sort=sort,
+        dir=direction,
+        sortable_columns=list(SORTABLE_COLUMNS),
+        dm_keys=DM_SEQUENCE,
+        dm_labels={k: DMS[k]["label"] for k in DM_SEQUENCE},
     )
 @app.route("/scrape", methods=["POST"])
 def scrape():
@@ -184,7 +250,7 @@ def upload_csv():
         return jsonify(
             error="No valid rows found (each row needs company_name and linkedin_profile_url)."
         ), 400
-    init_sqlite(DB_PATH)  # make sure the table exists
+    init_db()  # make sure the table exists
     con = sqlite3.connect(DB_PATH)
     existing_pairs = {
         (c, u) for c, u in
@@ -217,23 +283,27 @@ def upload_csv():
 @app.route("/download_csv")
 def download_csv():
     q = request.args.get("q", "").strip()
+    sort, direction = _normalize_sort(
+        request.args.get("sort", DEFAULT_SORT),
+        request.args.get("dir", DEFAULT_DIR),
+    )
     where = ""
     params: list = []
     if q:
-        where = "WHERE company_name LIKE ? ESCAPE '\\'"
+        where = "WHERE e.company_name LIKE ? ESCAPE '\\'"
         params.append(f"%{_escape_like(q)}%")
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["company_name", "first_name", "last_name", "job_title",
-                      "linkedin_profile_url", "email"])
+                     "linkedin_profile_url", "email"])
     if DB_PATH.exists():
         con = sqlite3.connect(DB_PATH)
         try:
             rows = con.execute(
-                f"""SELECT company_name, first_name, last_name, job_title,
-                           linkedin_profile_url, email
-                    FROM employees {where}
-                    ORDER BY company_name, last_name, first_name""",
+                f"""SELECT e.company_name, e.first_name, e.last_name, e.job_title,
+                           e.linkedin_profile_url, e.email
+                    FROM employees e {where}
+                    {_order_clause(sort, direction)}""",
                 params,
             ).fetchall()
             writer.writerows(rows)
@@ -246,6 +316,23 @@ def download_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+# --------------------------------------------------------------------- #
+# LinkedIn DM send log
+# --------------------------------------------------------------------- #
+@app.route("/dm/sent", methods=["POST"])
+def dm_sent():
+    """Called by the UI after a DM was copied & the profile opened."""
+    url = clean_profile_url(request.form.get("linkedin_profile_url", ""))
+    dm = request.form.get("dm", "").strip()
+    if not url:
+        return jsonify(error="Invalid LinkedIn profile URL."), 400
+    if dm not in DMS:
+        return jsonify(error=f"Unknown DM '{dm}'."), 400
+    already = load_sent_dms([url]).get(url, set())
+    if dm in already:
+        return jsonify(ok=True, already=True)   # idempotent: don't double-log
+    log_dm_result(url, dm, "sent", detail="copied via UI")
+    return jsonify(ok=True, already=False)
 # --------------------------------------------------------------------- #
 # Database tool (db_tool.py), driven from the UI
 # --------------------------------------------------------------------- #

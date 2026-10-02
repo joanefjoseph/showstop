@@ -24,6 +24,7 @@ import sys
 import time
 from pathlib import Path
 from config import DB_PATH
+from db import init_db
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 # --------------------------------------------------------------------------- #
@@ -70,21 +71,8 @@ def clean_title(title: str | None) -> str:
 # Storage
 # --------------------------------------------------------------------------- #
 def init_sqlite(db_path: Path) -> None:
-    """Create the table if it doesn't exist. Email is nullable."""
-    con = sqlite3.connect(db_path)
-    con.execute(
-        """CREATE TABLE IF NOT EXISTS employees (
-               company_name        TEXT NOT NULL,
-               first_name          TEXT,
-               last_name           TEXT,
-               job_title           TEXT,
-               linkedin_profile_url TEXT NOT NULL,
-               email               TEXT,
-               PRIMARY KEY (company_name, linkedin_profile_url)
-           )"""
-    )
-    con.commit()
-    con.close()
+    """Create the tables if they don't exist (schema lives in schema.sql)."""
+    init_db(db_path)
 def load_existing(db_path: Path, company_name: str) -> set[str]:
     """Return the set of profile URLs already saved for this company."""
     con = sqlite3.connect(db_path)
