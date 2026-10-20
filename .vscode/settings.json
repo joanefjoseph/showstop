@@ -1,0 +1,6 @@
+{
+  "files.associations": {
+    "**/dm_assistant/templates/*.html": "jinja-html",
+    "**/helpers/scripts/templates/*.html": "jinja-html"
+  }
+}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="muted">This context is sent to Gemini with every draft request. Only include what the assistant may rely on or say.
+Each save keeps a version history, so you can update phase/focus as often as you like.</p>
+
+{% for key, meta in fields.items() %}
+<form class="card" method="post">
+  <h3 style="margin:0 0 4px">{{ meta[0] }}</h3>
+  <p class="muted" style="margin-top:0">{{ meta[1] }}</p>
+  <input type="hidden" name="key" value="{{ key }}">
+  <textarea name="value" rows="{{ 12 if key == 'company' else 6 }}">{{ ctx[key].value if key in ctx else "" }}</textarea>
+  <div class="actions">
+    <button class="primary">Save</button>
+    <span class="muted">{% if key in ctx %}Last updated {{ ctx[key].updated_at }}{% else %}Not set{% endif %}</span>
+  </div>
+  {% if history[key]|length > 1 %}
+  <details><summary class="muted">Previous versions</summary>
+    {% for h in history[key][1:] %}<div class="msg"><span class="muted">{{ h.created_at }}</span>
+{{ h.value }}</div>{% endfor %}
+  </details>
+  {% endif %}
+</form>
+{% endfor %}
+{% endblock %}

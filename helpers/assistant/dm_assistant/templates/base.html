@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LinkedIn DM Assistant</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:980px;margin:0 auto;padding:16px 20px 80px;background:#f4f2ee;color:#1d1d1d}
+  nav{display:flex;gap:18px;align-items:center;margin-bottom:12px}
+  nav a{color:#0a66c2;text-decoration:none;font-weight:600}
+  .card{background:#fff;border-radius:10px;padding:16px;margin:14px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .card.done{opacity:.45}
+  .head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .tag{font-size:12px;padding:2px 9px;border-radius:10px;background:#e8f0fa;color:#0a66c2}
+  .tag.warn{background:#fff4e0;color:#915907}
+  textarea{width:100%;box-sizing:border-box;font:inherit;font-size:15px;padding:10px;border:1px solid #ccc;border-radius:8px;margin-top:8px}
+  button{font:inherit;padding:7px 15px;border-radius:18px;border:1px solid #0a66c2;background:#fff;color:#0a66c2;cursor:pointer}
+  button.primary{background:#0a66c2;color:#fff}
+  button.ghost{border-color:#999;color:#666}
+  button:disabled{opacity:.5;cursor:default}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .actions input{flex:1;min-width:200px;padding:7px 12px;border:1px solid #ccc;border-radius:18px;font:inherit}
+  .muted{color:#666;font-size:13px}
+  .convo{max-height:320px;overflow:auto;background:#fafafa;border-radius:8px;padding:8px 12px;margin:6px 0}
+  .msg{margin:8px 0;white-space:pre-wrap}
+  .msg.me{color:#555}
+  .status{margin-top:6px;font-size:14px}
+  .status.ok{color:#057642}.status.err{color:#b42318}
+  .error{color:#b42318;font-size:14px}
+  .flash{background:#fff;border-left:4px solid #0a66c2;padding:8px 12px;margin:8px 0}
+  .warnbox{background:#fff4e0;border-left:4px solid #d98c00;padding:8px 12px;margin:8px 0}
+  table{border-collapse:collapse;width:100%;font-size:14px}
+  td,th{text-align:left;padding:4px 8px;border-bottom:1px solid #eee}
+</style>
+</head>
+<body>
+<nav>
+  <strong>LinkedIn DM Assistant</strong>
+  <a href="{{ url_for('index') }}">Drafts</a>
+  <a href="{{ url_for('context_page') }}">Context</a>
+</nav>
+{% with msgs = get_flashed_messages() %}{% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}{% endwith %}
+{% block body %}{% endblock %}
+</body>
+</html>

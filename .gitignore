@@ -22,3 +22,10 @@ people_data.csv
 
 # SQLite databases
 *.db
+
+# Virtual environments
+venv/
+.venv/
+
+# Browser profile build output
+browser-profile/

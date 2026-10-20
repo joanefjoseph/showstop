@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block body %}
+
+{% if missing %}
+<div class="warnbox">Missing context: {{ missing|join(", ") }}. <a href="{{ url_for('context_page') }}">Fill it in</a> for better drafts.</div>
+{% endif %}
+
+<div class="card">
+  <div class="head">
+    <form method="post" action="{{ url_for('run_now') }}" style="margin:0">
+      <button class="primary" {% if running %}disabled{% endif %}>{{ "Scanning…" if running else "Scan inbox now" }}</button>
+    </form>
+    <span class="muted">
+      Next runs: {% for t in next_runs %}{{ t.strftime("%a %H:%M") }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}
+    </span>
+  </div>
+  {% if runs %}
+  <details style="margin-top:8px"><summary class="muted">Recent runs</summary>
+    <table>
+      <tr><th>Started</th><th>Trigger</th><th>Status</th><th>Awaiting reply</th><th>New drafts</th><th>Notes</th></tr>
+      {% for r in runs %}
+      <tr><td>{{ r.started_at }}</td><td>{{ r.trigger }}</td><td>{{ r.status }}</td>
+          <td>{{ r.threads_found }}</td><td>{{ r.drafts_created }}</td><td class="error">{{ r.error or "" }}</td></tr>
+      {% endfor %}
+    </table>
+  </details>
+  {% endif %}
+</div>
+
+<h2>Drafts to review ({{ drafts|length }})</h2>
+{% for d in drafts %}
+<div class="card" id="draft-{{ d.id }}" data-url="{{ d.thread_url }}">
+  <div class="head">
+    <strong>{{ d.participant }}</strong>
+    {% if d.category %}<span class="tag">{{ d.category }}</span>{% endif %}
+    {% if d.kind == "connection_followup" %}<span class="tag">🤝 accepted your connection - follow-up</span>{% endif %}
+    {% if not d.needs_reply %}<span class="tag warn">probably no reply needed</span>{% endif %}
+    <span class="muted">drafted {{ d.created_at }}</span>
+    <a class="muted" href="{{ d.thread_url }}" target="_blank" rel="noopener">open thread ↗</a>
+  </div>
+  <p class="summary">{{ d.summary }}</p>
+
+  <details>
+    <summary class="muted">{{ "Your connection note" if d.kind == "connection_followup" else "Conversation (" ~ d.messages|length ~ " messages)" }}</summary>
+    <div class="convo">
+      {% for m in d.messages[-15:] %}
+      <div class="msg {{ 'me' if m.is_me }}"><b>{{ "You" if m.is_me else m.sender }}</b> <span class="muted">{{ m.time }}</span>
+{{ m.text }}</div>
+      {% endfor %}
+    </div>
+  </details>
+
+  <textarea rows="7">{{ d.draft }}</textarea>
+  <p class="muted rationale">💡 {{ d.rationale }}</p>
+  {% if d.error %}<p class="error">{{ d.error }}</p>{% endif %}
+
+  <div class="actions">
+    {% if direct_send %}<button class="primary" onclick="sendDraft({{ d.id }})">Send</button>{% endif %}
+    <button onclick="copyOpen({{ d.id }})">Copy &amp; Open</button>
+    <button class="mark-sent" hidden onclick="markSent({{ d.id }})">Mark as sent</button>
+    <button onclick="saveDraft({{ d.id }})">Save</button>
+    <input class="instr" placeholder="Regenerate instruction, e.g. 'shorter, propose Thursday'">
+    <button onclick="regen({{ d.id }})">Regenerate</button>
+    <button class="ghost" onclick="skip({{ d.id }})">Skip</button>
+  </div>
+  <div class="status"></div>
+</div>
+{% else %}
+<p class="muted">Nothing to review. 🎉</p>
+{% endfor %}
+
+{% if recent %}
+<details style="margin-top:24px"><summary><b>History</b></summary>
+  {% for d in recent %}
+  <div class="card" id="draft-{{ d.id }}">
+    <div class="head"><strong>{{ d.participant }}</strong><span class="tag">{{ d.status }}</span>
+      <span class="muted">{{ d.sent_at or d.updated_at }}</span>
+      {% if d.status != "sent" %}<button class="ghost" onclick="restore({{ d.id }})">Restore</button>{% endif %}
+    </div>
+    <div class="msg">{{ d.draft }}</div>
+    {% if d.error %}<p class="muted">{{ d.error }}</p>{% endif %}
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+
+<script>
+const card = id => document.getElementById('draft-' + id);
+const textOf = id => card(id).querySelector('textarea').value;
+function setStatus(id, msg, cls) { const s = card(id).querySelector('.status'); s.textContent = msg; s.className = 'status ' + (cls || ''); }
+function busy(id, on) { card(id).querySelectorAll('button, textarea, input').forEach(el => el.disabled = on); }
+function finish(id) { busy(id, true); card(id).classList.add('done'); }
+
+async function api(path, body) {
+  const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
+  let data = {}; try { data = await r.json(); } catch (e) {}
+  return {ok: r.ok, status: r.status, data};
+}
+
+async function sendDraft(id, force = false) {
+  busy(id, true); setStatus(id, 'Sending via LinkedIn…');
+  const r = await api(`/api/drafts/${id}/send`, {text: textOf(id), force});
+  busy(id, false);
+  if (r.ok) {
+    setStatus(id, r.data.unconfirmed ? 'Sent, but not confirmed - please check LinkedIn.' : 'Sent ✓', 'ok');
+    finish(id);
+  } else if (r.status === 409 && r.data.conflict) {
+    if (confirm(r.data.conflict + '\n\nSend anyway?')) return sendDraft(id, true);
+    setStatus(id, r.data.conflict, 'err');
+  } else {
+    setStatus(id, r.data.error || 'Send failed.', 'err');
+  }
+}
+
+async function copyOpen(id) {
+  const t = textOf(id);
+  try { await navigator.clipboard.writeText(t); }
+  catch (e) { const ta = card(id).querySelector('textarea'); ta.select(); document.execCommand('copy'); }
+  window.open(card(id).dataset.url, '_blank', 'noopener');
+  api(`/api/drafts/${id}/save`, {text: t});
+  setStatus(id, 'Copied! Paste it into LinkedIn (Ctrl/Cmd+V), send, then click "Mark as sent".', 'ok');
+  card(id).querySelector('.mark-sent').hidden = false;
+}
+
+async function markSent(id) {
+  const r = await api(`/api/drafts/${id}/mark-sent`, {text: textOf(id)});
+  if (r.ok) { setStatus(id, 'Marked as sent ✓', 'ok'); finish(id); }
+}
+
+async function saveDraft(id) {
+  const r = await api(`/api/drafts/${id}/save`, {text: textOf(id)});
+  setStatus(id, r.ok ? 'Saved.' : 'Save failed.', r.ok ? 'ok' : 'err');
+}
+
+async function regen(id) {
+  const instruction = card(id).querySelector('.instr').value;
+  busy(id, true); setStatus(id, 'Regenerating…');
+  const r = await api(`/api/drafts/${id}/regenerate`, {text: textOf(id), instruction});
+  busy(id, false);
+  if (r.ok) {
+    card(id).querySelector('textarea').value = r.data.draft;
+    card(id).querySelector('.rationale').textContent = '💡 ' + r.data.rationale;
+    setStatus(id, 'New version ready.', 'ok');
+  } else setStatus(id, r.data.error || 'Regenerate failed.', 'err');
+}
+
+async function skip(id) { const r = await api(`/api/drafts/${id}/skip`); if (r.ok) finish(id); }
+async function restore(id) { const r = await api(`/api/drafts/${id}/restore`); if (r.ok) location.reload(); }
+
+{% if running %}
+const poll = setInterval(async () => {
+  const r = await fetch('/api/status'); const s = await r.json();
+  if (!s.running) { clearInterval(poll); location.reload(); }
+}, 5000);
+{% endif %}
+</script>
+{% endblock %}
