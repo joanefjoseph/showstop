@@ -35,12 +35,17 @@ CONTEXT_FIELDS: dict[str, tuple[str, str]] = {
         "How to write the message after someone accepts your connection request: the one-line pitch "
         "you like, the meeting length/format (e.g. '20-min Zoom'), anything to always/never mention.",
     ),
+    "email": (
+        "Email guidance (optional)",
+        "Anything specific to your work inbox: who typically emails you, how formal to be, "
+        "what you never want to reply to, what always deserves a reply.",
+    ),    
     "style": (
         "Writing style (optional)",
         "Tone, length, words to avoid, how you sign off, example phrases you use.",
     ),
 }
-OPTIONAL_CONTEXT = {"style", "followup"}
+OPTIONAL_CONTEXT = {"style", "followup", "email"}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS context_entries (
@@ -86,9 +91,15 @@ CREATE TABLE IF NOT EXISTS runs (
     drafts_created INTEGER DEFAULT 0,
     error TEXT
 );
+CREATE TABLE IF NOT EXISTS email_seen (
+    message_id TEXT PRIMARY KEY,   -- every inbox email the assistant has already dealt with
+    outcome TEXT,
+    seen_at TEXT NOT NULL
+);
 """
 
-_UPDATABLE = {"draft", "status", "error", "sent_at", "summary", "rationale", "category", "needs_reply"}
+_UPDATABLE = {"draft", "status", "error", "sent_at", "summary", "rationale", "category",
+              "needs_reply", "meta_json"}
 
 
 def now() -> str:
@@ -117,6 +128,8 @@ def init_db() -> None:
     with connect() as c:
         c.executescript(SCHEMA)
         _ensure_column(c, "drafts", "kind", "TEXT NOT NULL DEFAULT 'reply'")  # migrate older DBs
+        _ensure_column(c, "drafts", "channel", "TEXT NOT NULL DEFAULT 'linkedin'")
+        _ensure_column(c, "drafts", "meta_json", "TEXT NOT NULL DEFAULT '{}'")
         # A crash mid-send leaves a draft in 'sending'; surface it instead of hiding it.
         c.execute(
             "UPDATE drafts SET status='pending', updated_at=?, "
@@ -159,6 +172,7 @@ def context_history(key: str, limit: int = 10) -> list[dict[str, Any]]:
 def _to_draft(row: sqlite3.Row) -> dict[str, Any]:
     d = dict(row)
     d["messages"] = json.loads(d.pop("conversation_json"))
+    d["meta"] = json.loads(d.pop("meta_json", None) or "{}")
     d["needs_reply"] = bool(d["needs_reply"])
     return d
 
@@ -192,22 +206,23 @@ def mark_checked(preview_key: str) -> None:
 
 def insert_draft(*, thread_id: str, thread_url: str, participant: str, preview_key: str,
                  state_hash: str, messages: list[dict], needs_reply: bool, category: str,
-                 summary: str, rationale: str, draft: str, kind: str = "reply") -> int:
+                 summary: str, rationale: str, draft: str, kind: str = "reply",
+                 channel: str = "linkedin", meta: dict | None = None) -> int:
     ts = now()
     with connect() as c:
         c.execute(
             "UPDATE drafts SET status='superseded', error='Replaced by a newer draft', updated_at=? "
-            "WHERE thread_id=? AND status='pending'",
-            (ts, thread_id),
+            "WHERE thread_id=? AND channel=? AND status='pending'",
+            (ts, thread_id, channel),
         )
         cur = c.execute(
             """INSERT INTO drafts (thread_id, thread_url, participant, preview_key, state_hash, kind,
-                   conversation_json, needs_reply, category, summary, rationale, draft,
-                   status, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)""",
-            (thread_id, thread_url, participant, preview_key, state_hash, kind,
-             json.dumps(messages, ensure_ascii=False), int(needs_reply), category, summary,
-             rationale, draft, ts, ts),
+                   channel, meta_json, conversation_json, needs_reply, category, summary, rationale,
+                   draft, status, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)""",
+            (thread_id, thread_url, participant, preview_key, state_hash, kind, channel,
+             json.dumps(meta or {}, ensure_ascii=False), json.dumps(messages, ensure_ascii=False),
+             int(needs_reply), category, summary, rationale, draft, ts, ts),
         )
         return int(cur.lastrowid)
 
@@ -216,7 +231,7 @@ def supersede_pending_for_participant(participant: str, reason: str) -> None:
     with connect() as c:
         c.execute(
             "UPDATE drafts SET status='superseded', error=?, updated_at=? "
-            "WHERE participant=? AND status='pending'",
+            "WHERE participant=? AND channel='linkedin' AND status='pending'",
             (reason, now(), participant),
         )
 
@@ -256,6 +271,17 @@ def claim_for_sending(draft_id: int) -> bool:
             (now(), draft_id),
         )
         return cur.rowcount == 1
+
+# ---------------------------------------------------------------- email bookkeeping
+def email_seen(message_id: str) -> bool:
+    with connect() as c:
+        return c.execute("SELECT 1 FROM email_seen WHERE message_id=?", (message_id,)).fetchone() is not None
+
+
+def mark_email_seen(message_id: str, outcome: str) -> None:
+    with connect() as c:
+        c.execute("INSERT OR REPLACE INTO email_seen (message_id, outcome, seen_at) VALUES (?, ?, ?)",
+                  (message_id, outcome, now()))
 
 
 # ---------------------------------------------------------------- runs

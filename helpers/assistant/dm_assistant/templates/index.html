@@ -1,5 +1,77 @@
 {% extends "base.html" %}
+
+{% macro card(d) %}
+{% set is_email = d.channel == "email" %}
+<div class="card" id="draft-{{ d.id }}" data-url="{{ d.thread_url }}" data-channel="{{ d.channel }}">
+  <div class="head">
+    <span class="tag {{ 'mail' if is_email }}">{{ "✉ Email" if is_email else "in LinkedIn" }}</span>
+    <strong>{{ d.participant }}</strong>
+    {% if d.category %}<span class="tag">{{ d.category }}</span>{% endif %}
+    {% if d.kind == "connection_followup" %}<span class="tag">🤝 accepted your connection - follow-up</span>{% endif %}
+    <span class="muted">drafted {{ d.created_at }}</span>
+    <a class="muted" href="{{ d.thread_url }}" target="_blank" rel="noopener">{{ "open webmail" if is_email else "open thread" }} ↗</a>
+  </div>
+  {% if is_email %}
+  <div style="margin-top:6px"><b>Subject:</b> {{ d.meta.subject }}
+    {% if d.meta.attachments %}<span class="muted"> 📎 {{ d.meta.attachments|join(", ") }}</span>{% endif %}
+  </div>
+  {% endif %}
+  <p class="summary">{{ d.summary }}</p>
+
+  <details>
+    <summary class="muted">{{ "Your connection note" if d.kind == "connection_followup" else ("Email thread" if is_email else "Conversation") ~ " (" ~ d.messages|length ~ ")" }}</summary>
+    <div class="convo">
+      {% for m in d.messages[-15:] %}
+      <div class="msg {{ 'me' if m.is_me }}"><b>{{ "You" if m.is_me else m.sender }}</b> <span class="muted">{{ m.time }}</span>
+{{ m.text }}</div>
+      {% endfor %}
+    </div>
+  </details>
+
+  {% if not d.needs_reply %}
+  <div class="flagbox">
+    <b>🚩 Probably needs no response.</b> {{ d.rationale }}
+    {% if d.meta.signals %}<div class="muted">Signals: {{ d.meta.signals|join("; ") }}</div>{% endif %}
+    <div class="actions">
+      <button class="primary approve-btn" onclick="noReply({{ d.id }})">✓ Approve: no response needed</button>
+      <button onclick="replyAnyway({{ d.id }})">Write a reply anyway</button>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="editor" {% if not d.needs_reply %}hidden{% endif %}>
+    {% if is_email %}
+    <div class="fields">
+      <label>To <input class="to" value="{{ d.meta.to }}"></label>
+      <label>Cc <input class="cc" value="{{ d.meta.cc }}" placeholder="(none)"></label>
+    </div>
+    {% endif %}
+    <textarea rows="{{ 10 if is_email else 7 }}">{{ d.draft }}</textarea>
+    <p class="muted rationale">💡 {{ d.rationale }}{% if is_email %} - the original email is quoted below your reply automatically.{% endif %}</p>
+    <div class="actions">
+      {% if is_email and email_send %}<button class="primary" onclick="sendDraft({{ d.id }})">Send email</button>{% endif %}
+      {% if not is_email and linkedin_send %}<button class="primary" onclick="sendDraft({{ d.id }})">Send</button>{% endif %}
+      <button onclick="copyOpen({{ d.id }})">Copy &amp; Open</button>
+      <button class="mark-sent" hidden onclick="markSent({{ d.id }})">Mark as sent</button>
+      <button onclick="saveDraft({{ d.id }})">Save</button>
+      <input class="instr" placeholder="Regenerate instruction, e.g. 'shorter, propose Thursday'">
+      <button onclick="regen({{ d.id }})">Regenerate</button>
+      <button class="ghost" onclick="skip({{ d.id }})">Skip</button>
+    </div>
+  </div>
+  {% if d.error %}<p class="error">{{ d.error }}</p>{% endif %}
+  <div class="status"></div>
+</div>
+{% endmacro %}
+
 {% block body %}
+<style>
+  .tag.mail{background:#eaf6ec;color:#1e6b33}
+  .flagbox{background:#fff8e6;border-left:4px solid #d98c00;border-radius:6px;padding:10px 12px;margin:8px 0}
+  .fields{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+  .fields label{flex:1;min-width:260px;font-size:13px;color:#666}
+  .fields input{width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid #ccc;border-radius:8px;font:inherit}
+</style>
 
 {% if missing %}
 <div class="warnbox">Missing context: {{ missing|join(", ") }}. <a href="{{ url_for('context_page') }}">Fill it in</a> for better drafts.</div>
@@ -8,7 +80,7 @@
 <div class="card">
   <div class="head">
     <form method="post" action="{{ url_for('run_now') }}" style="margin:0">
-      <button class="primary" {% if running %}disabled{% endif %}>{{ "Scanning…" if running else "Scan inbox now" }}</button>
+      <button class="primary" {% if running %}disabled{% endif %}>{{ "Scanning…" if running else "Scan LinkedIn + email now" }}</button>
     </form>
     <span class="muted">
       Next runs: {% for t in next_runs %}{{ t.strftime("%a %H:%M") }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}
@@ -17,7 +89,7 @@
   {% if runs %}
   <details style="margin-top:8px"><summary class="muted">Recent runs</summary>
     <table>
-      <tr><th>Started</th><th>Trigger</th><th>Status</th><th>Awaiting reply</th><th>New drafts</th><th>Notes</th></tr>
+      <tr><th>Started</th><th>Trigger</th><th>Status</th><th>Candidates</th><th>New drafts</th><th>Notes</th></tr>
       {% for r in runs %}
       <tr><td>{{ r.started_at }}</td><td>{{ r.trigger }}</td><td>{{ r.status }}</td>
           <td>{{ r.threads_found }}</td><td>{{ r.drafts_created }}</td><td class="error">{{ r.error or "" }}</td></tr>
@@ -28,56 +100,32 @@
 </div>
 
 <h2>Drafts to review ({{ drafts|length }})</h2>
-{% for d in drafts %}
-<div class="card" id="draft-{{ d.id }}" data-url="{{ d.thread_url }}">
-  <div class="head">
-    <strong>{{ d.participant }}</strong>
-    {% if d.category %}<span class="tag">{{ d.category }}</span>{% endif %}
-    {% if d.kind == "connection_followup" %}<span class="tag">🤝 accepted your connection - follow-up</span>{% endif %}
-    {% if not d.needs_reply %}<span class="tag warn">probably no reply needed</span>{% endif %}
-    <span class="muted">drafted {{ d.created_at }}</span>
-    <a class="muted" href="{{ d.thread_url }}" target="_blank" rel="noopener">open thread ↗</a>
-  </div>
-  <p class="summary">{{ d.summary }}</p>
+{% for d in drafts %}{{ card(d) }}{% else %}<p class="muted">Nothing to review. 🎉</p>{% endfor %}
 
-  <details>
-    <summary class="muted">{{ "Your connection note" if d.kind == "connection_followup" else "Conversation (" ~ d.messages|length ~ " messages)" }}</summary>
-    <div class="convo">
-      {% for m in d.messages[-15:] %}
-      <div class="msg {{ 'me' if m.is_me }}"><b>{{ "You" if m.is_me else m.sender }}</b> <span class="muted">{{ m.time }}</span>
-{{ m.text }}</div>
-      {% endfor %}
-    </div>
-  </details>
-
-  <textarea rows="7">{{ d.draft }}</textarea>
-  <p class="muted rationale">💡 {{ d.rationale }}</p>
-  {% if d.error %}<p class="error">{{ d.error }}</p>{% endif %}
-
-  <div class="actions">
-    {% if direct_send %}<button class="primary" onclick="sendDraft({{ d.id }})">Send</button>{% endif %}
-    <button onclick="copyOpen({{ d.id }})">Copy &amp; Open</button>
-    <button class="mark-sent" hidden onclick="markSent({{ d.id }})">Mark as sent</button>
-    <button onclick="saveDraft({{ d.id }})">Save</button>
-    <input class="instr" placeholder="Regenerate instruction, e.g. 'shorter, propose Thursday'">
-    <button onclick="regen({{ d.id }})">Regenerate</button>
-    <button class="ghost" onclick="skip({{ d.id }})">Skip</button>
-  </div>
-  <div class="status"></div>
+{% if flagged %}
+<div class="head" style="margin-top:28px">
+  <h2 style="margin:0">Flagged: probably no response needed ({{ flagged|length }})</h2>
+  <button onclick="approveAll()">✓ Approve all</button>
 </div>
-{% else %}
-<p class="muted">Nothing to review. 🎉</p>
-{% endfor %}
+<p class="muted">The assistant thinks these don't need an answer. Approve to file them, or ask for a reply anyway.</p>
+<div id="flagged">
+{% for d in flagged %}{{ card(d) }}{% endfor %}
+</div>
+{% endif %}
 
 {% if recent %}
 <details style="margin-top:24px"><summary><b>History</b></summary>
   {% for d in recent %}
   <div class="card" id="draft-{{ d.id }}">
-    <div class="head"><strong>{{ d.participant }}</strong><span class="tag">{{ d.status }}</span>
+    <div class="head">
+      <span class="tag {{ 'mail' if d.channel == 'email' }}">{{ "✉" if d.channel == "email" else "in" }}</span>
+      <strong>{{ d.participant }}</strong>
+      <span class="tag">{{ "no response needed (approved)" if d.status == "no_reply" else d.status }}</span>
       <span class="muted">{{ d.sent_at or d.updated_at }}</span>
       {% if d.status != "sent" %}<button class="ghost" onclick="restore({{ d.id }})">Restore</button>{% endif %}
     </div>
-    <div class="msg">{{ d.draft }}</div>
+    {% if d.channel == "email" %}<div class="muted">Subject: {{ d.meta.subject }}</div>{% endif %}
+    <div class="msg">{{ d.draft if d.status != "no_reply" else d.summary }}</div>
     {% if d.error %}<p class="muted">{{ d.error }}</p>{% endif %}
   </div>
   {% endfor %}
@@ -87,6 +135,11 @@
 <script>
 const card = id => document.getElementById('draft-' + id);
 const textOf = id => card(id).querySelector('textarea').value;
+const isEmail = id => card(id).dataset.channel === 'email';
+function recipients(id) {
+  const to = card(id).querySelector('.to'), cc = card(id).querySelector('.cc');
+  return to ? {to: to.value, cc: cc.value} : {};
+}
 function setStatus(id, msg, cls) { const s = card(id).querySelector('.status'); s.textContent = msg; s.className = 'status ' + (cls || ''); }
 function busy(id, on) { card(id).querySelectorAll('button, textarea, input').forEach(el => el.disabled = on); }
 function finish(id) { busy(id, true); card(id).classList.add('done'); }
@@ -98,11 +151,12 @@ async function api(path, body) {
 }
 
 async function sendDraft(id, force = false) {
-  busy(id, true); setStatus(id, 'Sending via LinkedIn…');
-  const r = await api(`/api/drafts/${id}/send`, {text: textOf(id), force});
+  busy(id, true); setStatus(id, isEmail(id) ? 'Sending email…' : 'Sending via LinkedIn…');
+  const r = await api(`/api/drafts/${id}/send`, {text: textOf(id), force, ...recipients(id)});
   busy(id, false);
   if (r.ok) {
-    setStatus(id, r.data.unconfirmed ? 'Sent, but not confirmed - please check LinkedIn.' : 'Sent ✓', 'ok');
+    if (r.data.warning) setStatus(id, 'Sent ✓ - ' + r.data.warning, 'err');
+    else setStatus(id, isEmail(id) ? 'Sent ✓ and saved to your Sent folder' : 'Sent ✓', 'ok');
     finish(id);
   } else if (r.status === 409 && r.data.conflict) {
     if (confirm(r.data.conflict + '\n\nSend anyway?')) return sendDraft(id, true);
@@ -117,8 +171,8 @@ async function copyOpen(id) {
   try { await navigator.clipboard.writeText(t); }
   catch (e) { const ta = card(id).querySelector('textarea'); ta.select(); document.execCommand('copy'); }
   window.open(card(id).dataset.url, '_blank', 'noopener');
-  api(`/api/drafts/${id}/save`, {text: t});
-  setStatus(id, 'Copied! Paste it into LinkedIn (Ctrl/Cmd+V), send, then click "Mark as sent".', 'ok');
+  api(`/api/drafts/${id}/save`, {text: t, ...recipients(id)});
+  setStatus(id, 'Copied! Paste it (Ctrl/Cmd+V), send it yourself, then click "Mark as sent".', 'ok');
   card(id).querySelector('.mark-sent').hidden = false;
 }
 
@@ -128,7 +182,7 @@ async function markSent(id) {
 }
 
 async function saveDraft(id) {
-  const r = await api(`/api/drafts/${id}/save`, {text: textOf(id)});
+  const r = await api(`/api/drafts/${id}/save`, {text: textOf(id), ...recipients(id)});
   setStatus(id, r.ok ? 'Saved.' : 'Save failed.', r.ok ? 'ok' : 'err');
 }
 
@@ -142,6 +196,35 @@ async function regen(id) {
     card(id).querySelector('.rationale').textContent = '💡 ' + r.data.rationale;
     setStatus(id, 'New version ready.', 'ok');
   } else setStatus(id, r.data.error || 'Regenerate failed.', 'err');
+}
+
+// --- "no response needed" flow
+async function noReply(id) {
+  const r = await api(`/api/drafts/${id}/no-reply`);
+  if (r.ok) { setStatus(id, 'Approved: no response needed ✓', 'ok'); finish(id); }
+  return r.ok;
+}
+
+async function approveAll() {
+  const cards = document.querySelectorAll('#flagged .card:not(.done)');
+  if (!cards.length || !confirm(`Approve "no response needed" for ${cards.length} message(s)?`)) return;
+  for (const c of cards) {
+    if (!c.querySelector('.flagbox') || c.querySelector('.flagbox').hidden) continue;  // you asked for a reply
+    await noReply(c.id.replace('draft-', ''));
+  }
+}
+
+async function replyAnyway(id) {
+  busy(id, true); setStatus(id, 'Drafting a reply…');
+  const r = await api(`/api/drafts/${id}/regenerate`, {force_reply: true});
+  busy(id, false);
+  if (r.ok) {
+    card(id).querySelector('textarea').value = r.data.draft;
+    card(id).querySelector('.rationale').textContent = '💡 ' + r.data.rationale;
+    card(id).querySelector('.flagbox').hidden = true;
+    card(id).querySelector('.editor').hidden = false;
+    setStatus(id, 'Draft ready - review and send.', 'ok');
+  } else setStatus(id, r.data.error || 'Could not draft a reply.', 'err');
 }
 
 async function skip(id) { const r = await api(`/api/drafts/${id}/skip`); if (r.ok) finish(id); }

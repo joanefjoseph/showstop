@@ -17,6 +17,9 @@ def main() -> None:
     sub.add_parser("login", help="Log in to LinkedIn once in a real browser window")
     sub.add_parser("serve", help="Run the review UI + the 9/1/5 scheduler (default)")
     sub.add_parser("scan", help="Run one scan now and exit")
+    sub.add_parser("email-test", help="Check IMAP/SMTP login and show the detected Sent folder")
+    sub.add_parser("models", help="List Gemini models available to your API key")
+    sub.add_parser("llm-test", help="Send one tiny test request to the configured Gemini model")
     c = sub.add_parser("context", help="View/update your context from the terminal")
     csub = c.add_subparsers(dest="action", required=True)
     csub.add_parser("show")
@@ -35,6 +38,25 @@ def main() -> None:
         ok = interactive_login()
         print("✅ Logged in - session saved." if ok else "❌ Could not confirm login; try again.")
         sys.exit(0 if ok else 1)
+
+    if cmd == "email-test":
+        from . import email_client
+        for line in email_client.self_test():
+            print(line)
+        return
+
+    if cmd == "models":
+        from . import llm
+        print(f"Configured: GEMINI_MODEL={settings.gemini_model}\n")
+        for model_id, display in llm.list_models():
+            marker = "  <- configured" if model_id == settings.gemini_model else ""
+            print(f"  {model_id:45} {display}{marker}")
+        return
+
+    if cmd == "llm-test":
+        from . import llm
+        print(llm.self_test())
+        return
 
     if cmd == "scan":
         from .pipeline import run_scan
