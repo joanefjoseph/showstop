@@ -445,40 +445,26 @@ def answered_elsewhere(message_ids: list[str]) -> set[str]:
     return found
 
 
-def send_reply(meta: dict, body: str, to: str, cc: str = "") -> SendResult:
-    """Called ONLY from the web UI when the user clicks 'Send email'."""
-    body = body.strip()
-    if not body:
-        return SendResult(False, error="Message is empty.")
-    if not [a for _, a in getaddresses([to]) if "@" in a]:
-        return SendResult(False, error="No valid recipient in 'To'.")
-
+def _compose(to: str, cc: str, subject: str) -> tuple[EmailMessage, str]:
     msg = EmailMessage()
     msg["From"] = _fmt_addr(settings.email_from_name, settings.email_address)
     msg["To"] = to
     if cc.strip():
         msg["Cc"] = cc
-    msg["Subject"] = meta.get("reply_subject") or "Re:"
+    msg["Subject"] = subject
     msg["Date"] = formatdate(localtime=True)
     new_id = make_msgid(domain=settings.email_address.split("@")[-1])
     msg["Message-ID"] = new_id
-    orig_id = meta.get("message_id", "")
-    if _is_real_id(orig_id):
-        msg["In-Reply-To"] = orig_id
-        msg["References"] = " ".join([*[r for r in meta.get("references", [])[-10:] if r != orig_id], orig_id])
+    return msg, new_id
 
-    text = body
-    if settings.email_quote_original and meta.get("orig_text"):
-        quoted = "\n".join(("> " + line) if line else ">" for line in meta["orig_text"].splitlines())
-        text += f"\n\nOn {meta.get('orig_date', '')}, {meta.get('orig_from', '')} wrote:\n{quoted}"
-    msg.set_content(text)
 
+def _deliver(msg: EmailMessage, new_id: str, answered_id: str = "") -> SendResult:
     # 1) Send. Any exception here means the message did not go out.
     with _smtp() as server:
         server.send_message(msg)
 
-    # 2) Save a copy to Sent + flag the original as answered. The email is already out,
-    #    so problems here are reported as a warning, never as a failed send.
+    # 2) Save a copy to Sent (+ flag the original as answered for replies). The email is already
+    #    out, so problems here are reported as a warning, never as a failed send.
     saved, warning = False, None
     try:
         time.sleep(2)  # give the server a moment in case it files sent mail itself
@@ -493,14 +479,52 @@ def send_reply(meta: dict, body: str, to: str, cc: str = "") -> SendResult:
                 saved = typ == "OK"
                 if not saved:
                     warning = f"Email was sent, but could not be saved to '{sent}'."
-            if _is_real_id(orig_id):
+            if _is_real_id(answered_id):
                 _select(conn, "INBOX", readonly=False)
-                for uid in _search(conn, "HEADER", "Message-ID", _q(orig_id)):
+                for uid in _search(conn, "HEADER", "Message-ID", _q(answered_id)):
                     conn.uid("STORE", uid.decode(), "+FLAGS", r"(\Answered)")
     except Exception as e:
         log.exception("Post-send bookkeeping failed")
         warning = f"Email was sent, but saving to Sent / flagging as answered failed: {e}"
     return SendResult(True, saved_to_sent=saved, warning=warning)
+
+
+def _check(body: str, to: str) -> str | None:
+    if not body.strip():
+        return "Message is empty."
+    if not [a for _, a in getaddresses([to]) if "@" in a]:
+        return "No valid recipient in 'To'."
+    return None
+
+
+def send_reply(meta: dict, body: str, to: str, cc: str = "") -> SendResult:
+    """Called ONLY from the web UI when the user clicks 'Send email' on a reply draft."""
+    problem = _check(body, to)
+    if problem:
+        return SendResult(False, error=problem)
+    msg, new_id = _compose(to, cc, meta.get("reply_subject") or "Re:")
+    orig_id = meta.get("message_id", "")
+    if _is_real_id(orig_id):
+        msg["In-Reply-To"] = orig_id
+        msg["References"] = " ".join([*[r for r in meta.get("references", [])[-10:] if r != orig_id], orig_id])
+    text = body.strip()
+    if settings.email_quote_original and meta.get("orig_text"):
+        quoted = "\n".join(("> " + line) if line else ">" for line in meta["orig_text"].splitlines())
+        text += f"\n\nOn {meta.get('orig_date', '')}, {meta.get('orig_from', '')} wrote:\n{quoted}"
+    msg.set_content(text)
+    return _deliver(msg, new_id, answered_id=orig_id)
+
+
+def send_new(to: str, subject: str, body: str, cc: str = "") -> SendResult:
+    """Called ONLY from the web UI when the user clicks 'Send email' on a new-outreach draft."""
+    problem = _check(body, to)
+    if problem:
+        return SendResult(False, error=problem)
+    if not subject.strip():
+        return SendResult(False, error="Add a subject line.")
+    msg, new_id = _compose(to, cc, subject.strip())
+    msg.set_content(body.strip())
+    return _deliver(msg, new_id)
 
 
 def self_test() -> list[str]:

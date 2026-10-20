@@ -5,6 +5,7 @@ import logging
 import threading
 import webbrowser
 from dataclasses import asdict
+from email.utils import parseaddr
 
 from . import db, email_client, linkedin, llm
 from .config import settings
@@ -37,8 +38,10 @@ def _scan_linkedin(context: dict) -> tuple[int, int, list[str]]:
         if db.is_handled(t.thread_id, h):
             continue
         msgs = [asdict(m) for m in t.messages]
+        contact = db.find_outreach_contact(name=t.participant)
+        meta = {"person_notes": llm.format_person_notes(contact)} if contact else {}
         try:
-            r = llm.draft_reply(context, t.participant, msgs, kind=t.kind)
+            r = llm.draft_reply(context, t.participant, msgs, kind=t.kind, meta=meta)
         except llm.ModelUnavailableError:
             raise  # same problem for every message: abort this channel, show it in the run log
         except Exception as e:  # this thread is retried next run
@@ -48,6 +51,7 @@ def _scan_linkedin(context: dict) -> tuple[int, int, list[str]]:
         db.insert_draft(
             thread_id=t.thread_id, thread_url=t.url, participant=t.participant,
             preview_key=t.preview_key, state_hash=h, messages=msgs, kind=t.kind, channel="linkedin",
+            meta=meta,
             needs_reply=r.needs_reply, category=r.category, summary=r.summary,
             rationale=r.rationale, draft=r.reply,
         )
@@ -77,6 +81,9 @@ def _scan_email(context: dict) -> tuple[int, int, list[str]]:
         mark_seen=db.mark_email_seen,
     )
     for it in items:  # oldest first
+        contact = db.find_outreach_contact(email=parseaddr(it.sender_display)[1])
+        if contact:
+            it.meta["person_notes"] = llm.format_person_notes(contact)
         try:
             r = llm.draft_reply(context, it.sender_display, it.messages, channel="email", meta=it.meta)
         except llm.ModelUnavailableError:

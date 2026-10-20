@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block body %}
+<style>
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid label, .full{display:block;font-size:13px;color:#555;margin-top:10px}
+  .grid input, .full input{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #ccc;border-radius:8px;font:inherit;margin-top:4px}
+  fieldset{border:1px solid #ddd;border-radius:8px;margin-top:14px;padding:10px 14px}
+  fieldset label{display:block;margin:6px 0}
+</style>
+
+<h2>Start a new conversation</h2>
+<p class="muted">Tell the assistant who the person is and why you want to talk to them. It drafts the opening
+message using your company context; you review, edit and send it from the Drafts page.</p>
+
+<form class="card" method="post" onsubmit="const b=document.getElementById('go'); b.disabled=true; b.textContent='Drafting…';">
+  <div class="grid">
+    <label>Name *
+      <input name="name" required value="{{ form.get('name', '') }}" placeholder="Jane Doe"></label>
+    <label>Role &amp; company
+      <input name="role" value="{{ form.get('role', '') }}" placeholder="Head of Operations at Acme Logistics"></label>
+    <label>LinkedIn profile URL
+      <input name="linkedin_url" value="{{ form.get('linkedin_url', '') }}" placeholder="https://www.linkedin.com/in/janedoe"></label>
+    <label>Email address
+      <input name="email" type="email" value="{{ form.get('email', '') }}" placeholder="jane@acme.com"></label>
+  </div>
+
+  <label class="full">Who are they? (what you know: what their team does, how you found them, anything relevant)
+    <textarea name="about" rows="4">{{ form.get('about', '') }}</textarea></label>
+
+  <label class="full">Why do you want to start this conversation, and what outcome are you hoping for? *
+    <textarea name="reason" rows="4" required placeholder="e.g. Their warehouses look like a fit for our pilot programme; I'd like a 20-min call to explore a partnership.">{{ form.get('reason', '') }}</textarea></label>
+
+  <label class="full">Extra instruction for this draft (optional)
+    <input name="instruction" value="{{ form.get('instruction', '') }}" placeholder="e.g. mention we met briefly at LogiCon; keep it very casual"></label>
+
+  <fieldset>
+    <legend>What should I draft? (pick one or more)</legend>
+    <label><input type="checkbox" name="kinds" value="outreach_connect" {{ "checked" if "outreach_connect" in selected }}>
+      <b>LinkedIn connect note</b> - max {{ note_limit }} characters. Once they accept, the assistant automatically drafts the follow-up with your intro and a meeting request.</label>
+    <label><input type="checkbox" name="kinds" value="outreach_dm" {{ "checked" if "outreach_dm" in selected }}>
+      <b>LinkedIn DM</b> - for people you're already connected with (or can message directly).</label>
+    <label><input type="checkbox" name="kinds" value="outreach_email" {{ "checked" if "outreach_email" in selected }}>
+      <b>Email</b> - subject + body{% if not email_enabled %} <span class="muted">(email sending isn't configured, so you'll get Copy &amp; Open only)</span>{% endif %}.</label>
+  </fieldset>
+
+  <div class="actions" style="margin-top:14px">
+    <button class="primary" id="go">Draft message(s)</button>
+    <span class="muted">Each message type uses one Gemini request and takes a few seconds.</span>
+  </div>
+</form>
+{% endblock %}

@@ -77,6 +77,9 @@ class Settings:
     email_signature: str = _env("EMAIL_SIGNATURE").replace("\\n", "\n")
     email_webmail_url: str = _env("EMAIL_WEBMAIL_URL", "https://privateemail.com/appsuite/")
 
+    # Max length of connect notes the assistant WRITES (LinkedIn's limit)
+    connect_note_limit: int = int(_env("LINKEDIN_CONNECT_NOTE_LIMIT", "300"))
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "assistant.db"

@@ -2,22 +2,37 @@
 
 {% macro card(d) %}
 {% set is_email = d.channel == "email" %}
+{% set is_outreach = d.kind.startswith("outreach") %}
+{% set is_note = d.kind == "outreach_connect" %}
 <div class="card" id="draft-{{ d.id }}" data-url="{{ d.thread_url }}" data-channel="{{ d.channel }}">
   <div class="head">
     <span class="tag {{ 'mail' if is_email }}">{{ "✉ Email" if is_email else "in LinkedIn" }}</span>
+    {% if is_outreach %}<span class="tag new">🚀 new outreach · {{ outreach_labels[d.kind] }}</span>{% endif %}
     <strong>{{ d.participant }}</strong>
     {% if d.category %}<span class="tag">{{ d.category }}</span>{% endif %}
     {% if d.kind == "connection_followup" %}<span class="tag">🤝 accepted your connection - follow-up</span>{% endif %}
     <span class="muted">drafted {{ d.created_at }}</span>
-    <a class="muted" href="{{ d.thread_url }}" target="_blank" rel="noopener">{{ "open webmail" if is_email else "open thread" }} ↗</a>
+    <a class="muted" href="{{ d.thread_url }}" target="_blank" rel="noopener">{{ "open webmail" if is_email else ("open profile" if is_outreach else "open thread") }} ↗</a>
   </div>
-  {% if is_email %}
+  {% if is_email and not is_outreach %}
   <div style="margin-top:6px"><b>Subject:</b> {{ d.meta.subject }}
     {% if d.meta.attachments %}<span class="muted"> 📎 {{ d.meta.attachments|join(", ") }}</span>{% endif %}
   </div>
   {% endif %}
   <p class="summary">{{ d.summary }}</p>
 
+  {% if is_outreach %}
+  <details>
+    <summary class="muted">About this contact</summary>
+    <div class="convo">
+      {% if d.meta.role %}<div class="msg"><b>Role / company:</b> {{ d.meta.role }}</div>{% endif %}
+      {% if d.meta.about %}<div class="msg"><b>Who they are:</b> {{ d.meta.about }}</div>{% endif %}
+      {% if d.meta.reason %}<div class="msg"><b>Why you're reaching out:</b> {{ d.meta.reason }}</div>{% endif %}
+      {% if d.meta.email %}<div class="msg"><b>Email:</b> {{ d.meta.email }}</div>{% endif %}
+      {% if d.meta.linkedin_url %}<div class="msg"><b>LinkedIn:</b> {{ d.meta.linkedin_url }}</div>{% endif %}
+    </div>
+  </details>
+  {% else %}
   <details>
     <summary class="muted">{{ "Your connection note" if d.kind == "connection_followup" else ("Email thread" if is_email else "Conversation") ~ " (" ~ d.messages|length ~ ")" }}</summary>
     <div class="convo">
@@ -25,8 +40,11 @@
       <div class="msg {{ 'me' if m.is_me }}"><b>{{ "You" if m.is_me else m.sender }}</b> <span class="muted">{{ m.time }}</span>
 {{ m.text }}</div>
       {% endfor %}
+      {% if d.meta.person_notes %}<div class="msg muted"><b>Your notes on this person:</b>
+{{ d.meta.person_notes }}</div>{% endif %}
     </div>
   </details>
+  {% endif %}
 
   {% if not d.needs_reply %}
   <div class="flagbox">
@@ -42,16 +60,21 @@
   <div class="editor" {% if not d.needs_reply %}hidden{% endif %}>
     {% if is_email %}
     <div class="fields">
+      {% if is_outreach %}<label style="flex-basis:100%">Subject <input class="subject" value="{{ d.meta.subject }}"></label>{% endif %}
       <label>To <input class="to" value="{{ d.meta.to }}"></label>
       <label>Cc <input class="cc" value="{{ d.meta.cc }}" placeholder="(none)"></label>
     </div>
     {% endif %}
-    <textarea rows="{{ 10 if is_email else 7 }}">{{ d.draft }}</textarea>
-    <p class="muted rationale">💡 {{ d.rationale }}{% if is_email %} - the original email is quoted below your reply automatically.{% endif %}</p>
+    <textarea rows="{{ 4 if is_note else (10 if is_email else 7) }}">{{ d.draft }}</textarea>
+    {% if is_note %}<div class="counter muted" data-limit="{{ note_limit }}"></div>{% endif %}
+    <p class="muted rationale">💡 {{ d.rationale }}</p>
+    {% if is_email and not is_outreach %}<p class="muted">The original email is quoted below your reply automatically.</p>{% endif %}
+    {% if is_note %}<p class="muted">To send: Copy &amp; Open → on their profile click <b>Connect</b> → <b>Add a note</b> → paste → Send. When they accept, the follow-up is drafted for you automatically.</p>{% endif %}
+    {% if d.kind == "outreach_dm" %}<p class="muted">To send: Copy &amp; Open → on their profile click <b>Message</b> → paste → Send.</p>{% endif %}
     <div class="actions">
       {% if is_email and email_send %}<button class="primary" onclick="sendDraft({{ d.id }})">Send email</button>{% endif %}
-      {% if not is_email and linkedin_send %}<button class="primary" onclick="sendDraft({{ d.id }})">Send</button>{% endif %}
-      <button onclick="copyOpen({{ d.id }})">Copy &amp; Open</button>
+      {% if not is_email and not is_outreach and linkedin_send %}<button class="primary" onclick="sendDraft({{ d.id }})">Send</button>{% endif %}
+      <button {% if is_outreach and not is_email %}class="primary"{% endif %} onclick="copyOpen({{ d.id }})">Copy &amp; Open{{ " profile" if is_outreach and not is_email }}</button>
       <button class="mark-sent" hidden onclick="markSent({{ d.id }})">Mark as sent</button>
       <button onclick="saveDraft({{ d.id }})">Save</button>
       <input class="instr" placeholder="Regenerate instruction, e.g. 'shorter, propose Thursday'">
@@ -67,10 +90,12 @@
 {% block body %}
 <style>
   .tag.mail{background:#eaf6ec;color:#1e6b33}
+  .tag.new{background:#f1eafc;color:#5b2da8}
   .flagbox{background:#fff8e6;border-left:4px solid #d98c00;border-radius:6px;padding:10px 12px;margin:8px 0}
   .fields{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
   .fields label{flex:1;min-width:260px;font-size:13px;color:#666}
   .fields input{width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid #ccc;border-radius:8px;font:inherit}
+  .counter{text-align:right}
 </style>
 
 {% if missing %}
@@ -82,6 +107,7 @@
     <form method="post" action="{{ url_for('run_now') }}" style="margin:0">
       <button class="primary" {% if running %}disabled{% endif %}>{{ "Scanning…" if running else "Scan LinkedIn + email now" }}</button>
     </form>
+    <a href="{{ url_for('outreach_page') }}"><button type="button">🚀 New outreach</button></a>
     <span class="muted">
       Next runs: {% for t in next_runs %}{{ t.strftime("%a %H:%M") }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}
     </span>
@@ -119,6 +145,7 @@
   <div class="card" id="draft-{{ d.id }}">
     <div class="head">
       <span class="tag {{ 'mail' if d.channel == 'email' }}">{{ "✉" if d.channel == "email" else "in" }}</span>
+      {% if d.kind.startswith("outreach") %}<span class="tag new">{{ outreach_labels[d.kind] }}</span>{% endif %}
       <strong>{{ d.participant }}</strong>
       <span class="tag">{{ "no response needed (approved)" if d.status == "no_reply" else d.status }}</span>
       <span class="muted">{{ d.sent_at or d.updated_at }}</span>
@@ -136,9 +163,18 @@
 const card = id => document.getElementById('draft-' + id);
 const textOf = id => card(id).querySelector('textarea').value;
 const isEmail = id => card(id).dataset.channel === 'email';
-function recipients(id) {
-  const to = card(id).querySelector('.to'), cc = card(id).querySelector('.cc');
-  return to ? {to: to.value, cc: cc.value} : {};
+function fieldsOf(id) {   // To / Cc / Subject, where the card has them
+  const out = {};
+  for (const name of ['to', 'cc', 'subject']) {
+    const el = card(id).querySelector('.' + name);
+    if (el) out[name] = el.value;
+  }
+  return out;
+}
+function setText(id, value) {
+  const ta = card(id).querySelector('textarea');
+  ta.value = value;
+  ta.dispatchEvent(new Event('input'));   // refresh the character counter
 }
 function setStatus(id, msg, cls) { const s = card(id).querySelector('.status'); s.textContent = msg; s.className = 'status ' + (cls || ''); }
 function busy(id, on) { card(id).querySelectorAll('button, textarea, input').forEach(el => el.disabled = on); }
@@ -152,7 +188,7 @@ async function api(path, body) {
 
 async function sendDraft(id, force = false) {
   busy(id, true); setStatus(id, isEmail(id) ? 'Sending email…' : 'Sending via LinkedIn…');
-  const r = await api(`/api/drafts/${id}/send`, {text: textOf(id), force, ...recipients(id)});
+  const r = await api(`/api/drafts/${id}/send`, {text: textOf(id), force, ...fieldsOf(id)});
   busy(id, false);
   if (r.ok) {
     if (r.data.warning) setStatus(id, 'Sent ✓ - ' + r.data.warning, 'err');
@@ -171,7 +207,7 @@ async function copyOpen(id) {
   try { await navigator.clipboard.writeText(t); }
   catch (e) { const ta = card(id).querySelector('textarea'); ta.select(); document.execCommand('copy'); }
   window.open(card(id).dataset.url, '_blank', 'noopener');
-  api(`/api/drafts/${id}/save`, {text: t, ...recipients(id)});
+  api(`/api/drafts/${id}/save`, {text: t, ...fieldsOf(id)});
   setStatus(id, 'Copied! Paste it (Ctrl/Cmd+V), send it yourself, then click "Mark as sent".', 'ok');
   card(id).querySelector('.mark-sent').hidden = false;
 }
@@ -182,17 +218,19 @@ async function markSent(id) {
 }
 
 async function saveDraft(id) {
-  const r = await api(`/api/drafts/${id}/save`, {text: textOf(id), ...recipients(id)});
+  const r = await api(`/api/drafts/${id}/save`, {text: textOf(id), ...fieldsOf(id)});
   setStatus(id, r.ok ? 'Saved.' : 'Save failed.', r.ok ? 'ok' : 'err');
 }
 
 async function regen(id) {
   const instruction = card(id).querySelector('.instr').value;
   busy(id, true); setStatus(id, 'Regenerating…');
-  const r = await api(`/api/drafts/${id}/regenerate`, {text: textOf(id), instruction});
+  const r = await api(`/api/drafts/${id}/regenerate`, {text: textOf(id), instruction, ...fieldsOf(id)});
   busy(id, false);
   if (r.ok) {
-    card(id).querySelector('textarea').value = r.data.draft;
+    setText(id, r.data.draft);
+    const subject = card(id).querySelector('.subject');
+    if (subject && r.data.subject) subject.value = r.data.subject;
     card(id).querySelector('.rationale').textContent = '💡 ' + r.data.rationale;
     setStatus(id, 'New version ready.', 'ok');
   } else setStatus(id, r.data.error || 'Regenerate failed.', 'err');
@@ -219,7 +257,7 @@ async function replyAnyway(id) {
   const r = await api(`/api/drafts/${id}/regenerate`, {force_reply: true});
   busy(id, false);
   if (r.ok) {
-    card(id).querySelector('textarea').value = r.data.draft;
+    setText(id, r.data.draft);
     card(id).querySelector('.rationale').textContent = '💡 ' + r.data.rationale;
     card(id).querySelector('.flagbox').hidden = true;
     card(id).querySelector('.editor').hidden = false;
@@ -229,6 +267,18 @@ async function replyAnyway(id) {
 
 async function skip(id) { const r = await api(`/api/drafts/${id}/skip`); if (r.ok) finish(id); }
 async function restore(id) { const r = await api(`/api/drafts/${id}/restore`); if (r.ok) location.reload(); }
+
+// Live character counter for connect notes
+document.querySelectorAll('.counter').forEach(el => {
+  const ta = el.closest('.card').querySelector('textarea'), limit = +el.dataset.limit;
+  const update = () => {
+    const n = ta.value.length;
+    el.textContent = `${n} / ${limit} characters` + (n > limit ? ' - too long for LinkedIn' : '');
+    el.style.color = n > limit ? '#b42318' : '';
+  };
+  ta.addEventListener('input', update);
+  update();
+});
 
 {% if running %}
 const poll = setInterval(async () => {

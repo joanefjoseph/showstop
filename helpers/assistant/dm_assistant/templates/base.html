@@ -34,9 +34,10 @@
 </head>
 <body>
 <nav>
-  <strong>LinkedIn DM Assistant</strong>
+  <strong>Business DM Assistant</strong>
   <a href="{{ url_for('index') }}">Drafts</a>
   <a href="{{ url_for('context_page') }}">Context</a>
+  <a href="{{ url_for('outreach_page') }}">New outreach</a>
 </nav>
 {% with msgs = get_flashed_messages() %}{% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}{% endwith %}
 {% block body %}{% endblock %}

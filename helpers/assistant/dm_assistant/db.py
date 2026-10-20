@@ -40,12 +40,17 @@ CONTEXT_FIELDS: dict[str, tuple[str, str]] = {
         "Anything specific to your work inbox: who typically emails you, how formal to be, "
         "what you never want to reply to, what always deserves a reply.",
     ),    
+    "outreach": (
+        "Cold outreach guidance (optional)",
+        "Who you want as partners/clients, the value proposition for each audience, proof points you're "
+        "allowed to mention, and the call to action you prefer (e.g. '15-min intro call').",
+    ),
     "style": (
         "Writing style (optional)",
         "Tone, length, words to avoid, how you sign off, example phrases you use.",
     ),
 }
-OPTIONAL_CONTEXT = {"style", "followup", "email"}
+OPTIONAL_CONTEXT = {"style", "followup", "email", "outreach"}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS context_entries (
@@ -231,7 +236,8 @@ def supersede_pending_for_participant(participant: str, reason: str) -> None:
     with connect() as c:
         c.execute(
             "UPDATE drafts SET status='superseded', error=?, updated_at=? "
-            "WHERE participant=? AND channel='linkedin' AND status='pending'",
+            "WHERE participant=? AND channel='linkedin' AND status='pending' "
+            "AND kind NOT LIKE 'outreach%'",
             (reason, now(), participant),
         )
 
@@ -283,6 +289,23 @@ def mark_email_seen(message_id: str, outcome: str) -> None:
         c.execute("INSERT OR REPLACE INTO email_seen (message_id, outcome, seen_at) VALUES (?, ?, ?)",
                   (message_id, outcome, now()))
 
+
+# ---------------------------------------------------------------- prospects (outreach)
+def find_outreach_contact(*, name: str = "", email: str = "") -> dict | None:
+    """The details you entered on the outreach form for this person (most recent entry), if any."""
+    name, email = name.strip().lower(), email.strip().lower()
+    if not name and not email:
+        return None
+    with connect() as c:
+        rows = c.execute(
+            "SELECT meta_json FROM drafts WHERE kind LIKE 'outreach%' ORDER BY id DESC LIMIT 1000"
+        ).fetchall()
+    for r in rows:
+        meta = json.loads(r["meta_json"] or "{}")
+        if (email and meta.get("email", "").strip().lower() == email) or \
+           (name and meta.get("name", "").strip().lower() == name):
+            return meta
+    return None
 
 # ---------------------------------------------------------------- runs
 def start_run(trigger: str) -> int:

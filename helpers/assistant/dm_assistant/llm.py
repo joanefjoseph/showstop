@@ -360,22 +360,169 @@ def self_test() -> str:
     return f"OK - model '{_active_model}' returned valid structured output (reply={r.reply!r})."
 
 
+def _notes_block(notes: str | None) -> str:
+    if not notes:
+        return ""
+    return (f"\n\nBackground {_me()} recorded about this person when first reaching out "
+            f"(context only - don't quote it back to them):\n<person_notes>\n{notes}\n</person_notes>")
+
+
 def draft_reply(context: dict, participant: str, messages: list[dict], *,
                 kind: str = KIND_REPLY, channel: str = CHANNEL_LINKEDIN, meta: dict | None = None,
                 instruction: str | None = None, previous_draft: str | None = None,
                 force_reply: bool = False) -> DraftResult:
     system = build_system_prompt(context)
+    meta = meta or {}
+    notes = _notes_block(meta.get("person_notes"))
     if channel == CHANNEL_EMAIL:
-        result = _generate(system, build_email_prompt(participant, messages, meta or {}, instruction,
-                                                      previous_draft, force_reply))
+        result = _generate(system, build_email_prompt(participant, messages, meta, instruction,
+                                                      previous_draft, force_reply) + notes)
         if settings.email_signature and result.reply.strip():
             result.reply = result.reply.rstrip() + "\n\n" + settings.email_signature.strip()
     elif kind == KIND_FOLLOWUP:
-        result = _generate(system, build_followup_prompt(participant, messages, instruction, previous_draft))
+        result = _generate(system, build_followup_prompt(participant, messages, instruction,
+                                                         previous_draft) + notes)
         result.needs_reply = True  # a follow-up is always wanted
     else:
         result = _generate(system, build_reply_prompt(participant, messages, instruction,
-                                                      previous_draft, force_reply))
+                                                      previous_draft, force_reply) + notes)
     if force_reply:
         result.needs_reply = True
     return result
+
+# ======================================================================
+# First-contact outreach: connect notes, new DMs, cold emails
+# ======================================================================
+import re  # noqa: E402  (fine here; move to the top of the file if you prefer)
+
+OUTREACH_CONNECT = "outreach_connect"
+OUTREACH_DM = "outreach_dm"
+OUTREACH_EMAIL = "outreach_email"
+OUTREACH_KINDS = {
+    OUTREACH_CONNECT: "LinkedIn connect note",
+    OUTREACH_DM: "LinkedIn DM",
+    OUTREACH_EMAIL: "Email",
+}
+
+
+def format_person_notes(meta: dict) -> str:
+    lines = []
+    if meta.get("role"):
+        lines.append(f"Role / company: {meta['role']}")
+    if meta.get("about"):
+        lines.append(f"About them: {meta['about']}")
+    if meta.get("reason"):
+        lines.append(f"Why {_me()} reached out: {meta['reason']}")
+    return "\n".join(lines)
+
+
+def split_subject(text: str) -> tuple[str, str]:
+    """'Subject: X\\n\\nbody' -> ('X', 'body'). Returns ('', text) if there's no subject line."""
+    m = re.match(r"\s*subject\s*:\s*(.+?)\s*\n+(.*)", text, re.I | re.S)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    return "", text.strip()
+
+
+def build_outreach_prompt(context: dict, meta: dict, kind: str, instruction: str | None,
+                          previous_draft: str | None, previous_subject: str | None) -> str:
+    me = _me()
+    limit = settings.connect_note_limit
+    if kind == OUTREACH_CONNECT:
+        fmt = [
+            f"Format: the note attached to a LinkedIn connection request. HARD LIMIT: {limit} characters "
+            f"including spaces - aim for {max(limit - 30, 80)} or fewer.",
+            "- 1-2 sentences: greet them by first name, give the specific reason for connecting, and hint at "
+            "why what we do is relevant to them.",
+            "- The only goal is getting the request accepted: no pitch, no meeting request, no links. "
+            "(A fuller intro and meeting request follows automatically once they accept.)",
+        ]
+    elif kind == OUTREACH_DM:
+        fmt = [
+            "Format: a first LinkedIn direct message to someone who can already be messaged.",
+            "- 3-5 short sentences, under ~90 words. No subject line, no signature block.",
+            "- End with ONE low-friction ask (usually a short call - see the meeting rule).",
+        ]
+    else:
+        if settings.email_signature:
+            signoff = "Do NOT add a sign-off, name or signature block - the signature is appended automatically."
+        else:
+            signoff = f"End with a short sign-off and {me.split()[0]}'s first name; no signature block."
+        fmt = [
+            "Format: a first-contact business email.",
+            "- The very first line of `reply` must be 'Subject: <subject line>' (at most ~7 words, specific to "
+            "them, no clickbait, no ALL CAPS), then a blank line, then the body.",
+            "- Body: plain text (no markdown), 80-140 words, greeting with their first name, 2-3 short "
+            "paragraphs, ONE clear ask (usually a short call - see the meeting rule).",
+            "- No 'I hope this email finds you well', no apologising for reaching out. " + signoff,
+        ]
+
+    recipient = [f"- Name: {meta.get('name', '')}"]
+    if meta.get("role"):
+        recipient.append(f"- Role / company: {meta['role']}")
+    if meta.get("linkedin_url"):
+        recipient.append(f"- LinkedIn: {meta['linkedin_url']}")
+    if meta.get("email"):
+        recipient.append(f"- Email: {meta['email']}")
+
+    parts = [
+        f"Today is {datetime.now():%A, %B %d, %Y}.",
+        f"Task: write a FIRST-CONTACT message from {me}. There is no prior conversation - {me} is starting one.",
+        *fmt,
+        "",
+        "Recipient:", *recipient,
+        "",
+        f"What {me} knows about them:",
+        "<about>", meta.get("about") or "(nothing beyond the details above)", "</about>",
+        f"Why {me} wants to start this conversation / the outcome hoped for:",
+        "<reason>", meta.get("reason") or "(not specified - use the goals in the context)", "</reason>",
+    ]
+    if "outreach" in context:
+        parts += ["", f"{me}'s general guidance for cold outreach:", _ctx(context, "outreach")]
+    parts += [
+        "",
+        "Guidelines:",
+        "- Open with THEM, not us: a specific, truthful reason for reaching out, based ONLY on the information "
+        "above. Never invent facts about them (no made-up 'loved your recent post', mutual contacts or company news).",
+        "- Tie that to ONE concrete way the company/product is relevant to their role, using only facts from "
+        "the context. One idea, not a feature list.",
+        "- Sound like one person writing to another: no buzzwords, no flattery, no fake urgency, no template feel.",
+        "- Set needs_reply=true. `category`: prospect or partner. `summary`: one line describing the angle you "
+        "chose. `rationale`: why this angle should land with this person.",
+    ]
+    if previous_subject and kind == OUTREACH_EMAIL:
+        parts += ["", f"Current subject line: {previous_subject}"]
+    parts += _revision_parts(instruction, _strip_signature(previous_draft), False)
+    return "\n".join(parts)
+
+
+def draft_outreach(context: dict, meta: dict, kind: str, *, instruction: str | None = None,
+                   previous_draft: str | None = None,
+                   previous_subject: str | None = None) -> tuple[DraftResult, str]:
+    """Returns (draft, subject). Subject is '' for LinkedIn messages."""
+    if kind not in OUTREACH_KINDS:
+        raise ValueError(f"Unknown outreach type: {kind}")
+    system = build_system_prompt(context)
+    prompt = build_outreach_prompt(context, meta, kind, instruction, previous_draft, previous_subject)
+    result = _generate(system, prompt)
+    result.needs_reply = True
+    result.reply = result.reply.strip()
+    subject = ""
+
+    if kind == OUTREACH_EMAIL:
+        subject, body = split_subject(result.reply)
+        subject = subject or previous_subject or "Quick introduction"
+        if settings.email_signature and body:
+            body = body.rstrip() + "\n\n" + settings.email_signature.strip()
+        result.reply = body
+    elif kind == OUTREACH_CONNECT and len(result.reply) > settings.connect_note_limit:
+        # Over LinkedIn's limit: ask once for a shorter version.
+        limit = settings.connect_note_limit
+        shorter = _generate(system, prompt + (
+            f"\n\nYour previous attempt was {len(result.reply)} characters, which LinkedIn will reject:\n"
+            f"<draft>\n{result.reply}\n</draft>\nRewrite it in at most {max(limit - 30, 80)} characters."))
+        if len(shorter.reply.strip()) < len(result.reply):
+            shorter.reply = shorter.reply.strip()
+            shorter.needs_reply = True
+            result = shorter
+    return result, subject

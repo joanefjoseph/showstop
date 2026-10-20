@@ -4,7 +4,8 @@ import json
 import logging
 import os
 import threading
-from urllib.parse import urlparse
+import uuid
+from urllib.parse import quote_plus, urlparse
 
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, url_for
 
@@ -42,6 +43,8 @@ def index():
         next_runs=scheduler.next_run_times(),
         linkedin_send=settings.enable_direct_send,
         email_send=settings.email_enabled,
+        outreach_labels=llm.OUTREACH_KINDS,
+        note_limit=settings.connect_note_limit,
         missing=missing,
     )
 
@@ -73,6 +76,81 @@ def context_page():
     )
 
 
+# ------------------------------------------------------------------ new outreach
+def _render_outreach(form, selected, status: int = 200):
+    return render_template("outreach.html", form=form, selected=selected,
+                           note_limit=settings.connect_note_limit,
+                           email_enabled=settings.email_enabled), status
+
+
+@app.route("/outreach", methods=["GET", "POST"])
+def outreach_page():
+    if request.method == "GET":
+        return _render_outreach({}, [])
+
+    f = request.form
+    kinds = [k for k in f.getlist("kinds") if k in llm.OUTREACH_KINDS]
+    person = {k: f.get(k, "").strip() for k in ("name", "email", "linkedin_url", "role", "about", "reason")}
+    if person["linkedin_url"] and not person["linkedin_url"].startswith(("http://", "https://")):
+        person["linkedin_url"] = "https://" + person["linkedin_url"]
+
+    problems = []
+    if not person["name"]:
+        problems.append("Name is required.")
+    if not person["reason"]:
+        problems.append("Say why you want to start this conversation.")
+    if not kinds:
+        problems.append("Pick at least one message type.")
+    if llm.OUTREACH_EMAIL in kinds and "@" not in person["email"]:
+        problems.append("An email address is required to draft an email.")
+    if person["linkedin_url"] and "linkedin.com/" not in person["linkedin_url"]:
+        problems.append("That doesn't look like a LinkedIn profile URL.")
+    if problems:
+        for p in problems:
+            flash(p)
+        return _render_outreach(f, kinds, 400)
+
+    context = db.get_context()
+    created = 0
+    for kind in kinds:
+        label = llm.OUTREACH_KINDS[kind]
+        try:
+            result, subject = llm.draft_outreach(context, person, kind,
+                                                 instruction=f.get("instruction", "").strip() or None)
+        except Exception as e:
+            log.exception("Outreach drafting failed")
+            flash(f"Could not draft the {label}: {e}")
+            continue
+        _insert_outreach(person, kind, result, subject)
+        created += 1
+
+    if not created:
+        return _render_outreach(f, kinds, 502)
+    flash(f"Drafted {created} message(s) for {person['name']} - review below.")
+    return redirect(url_for("index"))
+
+
+def _insert_outreach(person: dict, kind: str, result: llm.DraftResult, subject: str) -> None:
+    uid = uuid.uuid4().hex[:12]
+    is_email = kind == llm.OUTREACH_EMAIL
+    meta = dict(person)
+    if is_email:
+        url = settings.email_webmail_url
+        meta.update(subject=subject, to=f"{person['name']} <{person['email']}>", cc="")
+    else:
+        # No profile URL? Open a LinkedIn people search for them instead.
+        url = person["linkedin_url"] or (
+            "https://www.linkedin.com/search/results/people/?keywords="
+            + quote_plus(f"{person['name']} {person['role']}".strip()))
+    db.insert_draft(
+        thread_id=f"outreach:{uid}", thread_url=url, participant=person["name"],
+        preview_key=f"outreach:{uid}", state_hash="", messages=[], kind=kind,
+        channel="email" if is_email else "linkedin", meta=meta,
+        needs_reply=True, category=result.category, summary=result.summary,
+        rationale=result.rationale, draft=result.reply,
+    )
+
+
 # ------------------------------------------------------------------ JSON API (used by the UI)
 def _draft_or_404(draft_id: int) -> dict:
     d = db.get_draft(draft_id)
@@ -81,13 +159,16 @@ def _draft_or_404(draft_id: int) -> dict:
     return d
 
 
-def _save_recipients(d: dict, data: dict) -> None:
-    if d["channel"] == "email" and ("to" in data or "cc" in data):
-        meta = dict(d["meta"])
-        meta["to"] = (data.get("to") or "").strip()
-        meta["cc"] = (data.get("cc") or "").strip()
-        db.update_draft(d["id"], meta_json=json.dumps(meta, ensure_ascii=False))
-        d["meta"] = meta
+def _save_fields(d: dict, data: dict) -> None:
+    """Persist edited To / Cc / Subject for email drafts."""
+    if d["channel"] != "email" or not ({"to", "cc", "subject"} & data.keys()):
+        return
+    meta = dict(d["meta"])
+    for key in ("to", "cc", "subject"):
+        if key in data:
+            meta[key] = (data.get(key) or "").strip()
+    db.update_draft(d["id"], meta_json=json.dumps(meta, ensure_ascii=False))
+    d["meta"] = meta
 
 
 @app.get("/api/status")
@@ -100,7 +181,7 @@ def api_save(draft_id: int):
     d = _draft_or_404(draft_id)
     data = request.get_json() or {}
     db.update_draft(draft_id, draft=data.get("text", ""))
-    _save_recipients(d, data)
+    _save_fields(d, data)
     return jsonify(ok=True)
 
 
@@ -108,21 +189,31 @@ def api_save(draft_id: int):
 def api_regenerate(draft_id: int):
     d = _draft_or_404(draft_id)
     data = request.get_json() or {}
-    force_reply = bool(data.get("force_reply"))
+    instruction = (data.get("instruction") or "").strip() or None
+    previous = (data.get("text") or d["draft"]) or None
+    subject = None
     try:
-        r = llm.draft_reply(
-            db.get_context(), d["participant"], d["messages"],
-            kind=d["kind"], channel=d["channel"], meta=d["meta"],
-            instruction=(data.get("instruction") or "").strip() or None,
-            previous_draft=(data.get("text") or d["draft"]) or None,
-            force_reply=force_reply,
-        )
+        if d["kind"] in llm.OUTREACH_KINDS:
+            r, subject = llm.draft_outreach(
+                db.get_context(), d["meta"], d["kind"], instruction=instruction, previous_draft=previous,
+                previous_subject=(data.get("subject") or d["meta"].get("subject") or None),
+            )
+        else:
+            r = llm.draft_reply(
+                db.get_context(), d["participant"], d["messages"],
+                kind=d["kind"], channel=d["channel"], meta=d["meta"],
+                instruction=instruction, previous_draft=previous,
+                force_reply=bool(data.get("force_reply")),
+            )
     except Exception as e:
         log.exception("Regenerate failed")
         return jsonify(error=f"Gemini error: {e}"), 502
     db.update_draft(draft_id, draft=r.reply, summary=r.summary, rationale=r.rationale,
                     category=r.category, needs_reply=int(r.needs_reply), error=None)
-    return jsonify(draft=r.reply, rationale=r.rationale, summary=r.summary, needs_reply=r.needs_reply)
+    if subject:
+        _save_fields(d, {"subject": subject})
+    return jsonify(draft=r.reply, rationale=r.rationale, summary=r.summary,
+                   needs_reply=r.needs_reply, subject=subject)
 
 
 @app.post("/api/drafts/<int:draft_id>/send")
@@ -139,6 +230,9 @@ def api_send(draft_id: int):
 
 def _send_linkedin(d: dict, text: str, data: dict):
     draft_id = d["id"]
+    if d["kind"] in llm.OUTREACH_KINDS:
+        return jsonify(error="New LinkedIn outreach is sent by you: use Copy & Open, then paste it "
+                             "into the Connect note or Message box."), 400
     if not settings.enable_direct_send:
         return jsonify(error="Direct sending is disabled (ENABLE_DIRECT_SEND=false). Use Copy & Open."), 403
     db.update_draft(draft_id, draft=text)
@@ -171,15 +265,21 @@ def _send_email(d: dict, text: str, data: dict):
     draft_id = d["id"]
     if not settings.email_enabled:
         return jsonify(error="Email is not configured (EMAIL_ADDRESS / EMAIL_PASSWORD)."), 403
-    _save_recipients(d, data)
+    _save_fields(d, data)
     to, cc = d["meta"].get("to", ""), d["meta"].get("cc", "")
+    is_new = d["kind"] == llm.OUTREACH_EMAIL
     if not to:
         return jsonify(error="Add at least one recipient in 'To'."), 400
+    if is_new and not d["meta"].get("subject", "").strip():
+        return jsonify(error="Add a subject line."), 400
     db.update_draft(draft_id, draft=text)
     if not db.claim_for_sending(draft_id):
         return jsonify(error="This draft is already being sent or is no longer pending."), 409
     try:
-        res = email_client.send_reply(d["meta"], text, to, cc)
+        if is_new:
+            res = email_client.send_new(to, d["meta"]["subject"], text, cc)
+        else:
+            res = email_client.send_reply(d["meta"], text, to, cc)
     except Exception as e:
         log.exception("Email send failed")
         msg = f"Email was NOT sent: {e}"
