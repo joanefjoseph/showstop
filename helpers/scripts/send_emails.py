@@ -119,7 +119,7 @@ EMAILS = {
         "greeting": "Hi {first_name},",
         "blocks": [
             ("body", [
-                "I'm following up on my previous message about *{company}* - the software product "
+                "I'm following up on my previous message about {company} - the software product "
                 "that will *revolutionize* the way that you manage ticket sales for all of your artists.",
                 "Our company is called {company} because we are changing the game for how music "
                 "labels and fan platforms envision what it takes to put on a show, and we aim to "

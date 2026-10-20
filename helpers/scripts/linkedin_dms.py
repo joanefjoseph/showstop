@@ -19,12 +19,12 @@ DM_SEQUENCE = ["dm1", "dm2", "dm3"]
 DMS = {
     "dm1": {
         "label": "DM 1 · Intro",
-        "text": """*Native ticketing checkout + membership API integration*
+        "text": """Native concert ticketing checkout + fanclub API integration
 Hi {first_name},
 
 I noticed the upcoming North American tour dates for several artists on {email_name}'s roster.
 
-Right now, when fans click through your official site or tour portal to buy tickets, they get redirected off-site to external vendors. That handoff causes three major bottlenecks:
+Right now, when fans go to your artist's official site or tour portal to buy tickets, they get redirected off-site to external vendors. That handoff causes three major bottlenecks:
  *1.* Data drop-off: Loss of first-party session telemetry and pixel tracking at checkout.
  *2.* Presale leaks: Static codes get shared or scraped, inviting bot attacks during ticket drops.
  *3.* Lost upsells: Zero ability to cross-sell merch, album pre-orders, or membership packages on the confirmation screen.
@@ -50,7 +50,7 @@ Instead of losing fans to third-party portals where drop-off is high and post-sa
 - *Seamless Fan Club & Presale Gating*: Give loyal fans the friction-free, secure buying experience they expect by authenticating official memberships natively at checkout—eliminating redirects, bots, and leaked promo codes.
 - *Unified Multi-Vendor Experience*: Deliver a single, consistent checkout flow across the entire tour, regardless of whether individual venues use Ticketmaster, AXS, or another primary ticket vendor.
 
-I see that you've been heading {job_title} at {email_name} for some time now, and I'm sure that a lot of your work has revolved around building a better experience for the fans of the artists at {email_name} while also increasing margins.
+I see that you've been {job_title} at {email_name} for some time now, and I'm sure that a lot of your work has revolved around building a better experience for the fans of the artists at {email_name} while also increasing margins.
 
 If what we are building at {company} is of any interest, would you be open to having a meeting in the next week to discuss more of what a collaboration with your team and {company} might look like?""",
     },
@@ -103,7 +103,7 @@ def _fields_for(row: dict) -> dict:
     first = (row.get("first_name") or "").strip() or "there"
     company_name = (row.get("company_name") or "").strip()
     email_name = (row.get("email_name") or "").strip() or company_name
-    job_title = (row.get("job_title") or "").strip() or "your team"
+    job_title = (row.get("job_title") or "").strip() or "working"
     return {
         "first_name": first,
         "email_name": email_name,
