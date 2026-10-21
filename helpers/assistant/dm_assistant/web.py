@@ -9,7 +9,7 @@ from urllib.parse import quote_plus, urlparse
 
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, url_for
 
-from . import db, email_client, linkedin, llm, pipeline, scheduler
+from . import db, email_client, handoff, linkedin, llm, pipeline, scheduler
 from .config import settings
 
 log = logging.getLogger(__name__)
@@ -46,6 +46,8 @@ def index():
         outreach_labels=llm.OUTREACH_KINDS,
         note_limit=settings.connect_note_limit,
         missing=missing,
+        queue=db.list_queue(),
+        task_labels=handoff.TASK_LABELS,
     )
 
 
@@ -83,17 +85,11 @@ def _render_outreach(form, selected, status: int = 200):
                            email_enabled=settings.email_enabled), status
 
 
-@app.route("/outreach", methods=["GET", "POST"])
-def outreach_page():
-    if request.method == "GET":
-        return _render_outreach({}, [])
-
-    f = request.form
-    kinds = [k for k in f.getlist("kinds") if k in llm.OUTREACH_KINDS]
-    person = {k: f.get(k, "").strip() for k in ("name", "email", "linkedin_url", "role", "about", "reason")}
+def _outreach_input(get, getlist) -> tuple[dict, list[str], list[str]]:
+    kinds = [k for k in getlist("kinds") if k in llm.OUTREACH_KINDS]
+    person = {k: (get(k) or "").strip() for k in ("name", "email", "linkedin_url", "role", "about", "reason")}
     if person["linkedin_url"] and not person["linkedin_url"].startswith(("http://", "https://")):
         person["linkedin_url"] = "https://" + person["linkedin_url"]
-
     problems = []
     if not person["name"]:
         problems.append("Name is required.")
@@ -105,50 +101,35 @@ def outreach_page():
         problems.append("An email address is required to draft an email.")
     if person["linkedin_url"] and "linkedin.com/" not in person["linkedin_url"]:
         problems.append("That doesn't look like a LinkedIn profile URL.")
+    return person, kinds, problems
+
+
+@app.route("/outreach", methods=["GET", "POST"])
+def outreach_page():
+    if request.method == "GET":
+        return _render_outreach({}, [])
+    f = request.form
+    person, kinds, problems = _outreach_input(lambda k: f.get(k, ""), f.getlist)
     if problems:
         for p in problems:
             flash(p)
         return _render_outreach(f, kinds, 400)
 
-    context = db.get_context()
-    created = 0
+    context, state, errs = db.get_context(), {}, []
+    drafted = queued = 0
     for kind in kinds:
-        label = llm.OUTREACH_KINDS[kind]
-        try:
-            result, subject = llm.draft_outreach(context, person, kind,
-                                                 instruction=f.get("instruction", "").strip() or None)
-        except Exception as e:
-            log.exception("Outreach drafting failed")
-            flash(f"Could not draft the {label}: {e}")
-            continue
-        _insert_outreach(person, kind, result, subject)
-        created += 1
-
-    if not created:
-        return _render_outreach(f, kinds, 502)
-    flash(f"Drafted {created} message(s) for {person['name']} - review below.")
+        p = handoff.payload_from_outreach(person, kind)
+        if handoff.draft_or_queue(context, p, state, errs) == "drafted":
+            drafted += 1
+        else:
+            queued += 1
+    if drafted:
+        flash(f"Drafted {drafted} message(s) for {person['name']} - review below.")
+    if queued:
+        flash(f"{queued} message(s) couldn't be drafted with the API "
+              f"({state.get('llm_down') or '; '.join(errs) or 'error'}). They're under "
+              f"'Waiting for a draft' - use Export to Gemini web.")
     return redirect(url_for("index"))
-
-
-def _insert_outreach(person: dict, kind: str, result: llm.DraftResult, subject: str) -> None:
-    uid = uuid.uuid4().hex[:12]
-    is_email = kind == llm.OUTREACH_EMAIL
-    meta = dict(person)
-    if is_email:
-        url = settings.email_webmail_url
-        meta.update(subject=subject, to=f"{person['name']} <{person['email']}>", cc="")
-    else:
-        # No profile URL? Open a LinkedIn people search for them instead.
-        url = person["linkedin_url"] or (
-            "https://www.linkedin.com/search/results/people/?keywords="
-            + quote_plus(f"{person['name']} {person['role']}".strip()))
-    db.insert_draft(
-        thread_id=f"outreach:{uid}", thread_url=url, participant=person["name"],
-        preview_key=f"outreach:{uid}", state_hash="", messages=[], kind=kind,
-        channel="email" if is_email else "linkedin", meta=meta,
-        needs_reply=True, category=result.category, summary=result.summary,
-        rationale=result.rationale, draft=result.reply,
-    )
 
 
 # ------------------------------------------------------------------ JSON API (used by the UI)
@@ -322,4 +303,51 @@ def api_skip(draft_id: int):
 def api_restore(draft_id: int):
     _draft_or_404(draft_id)
     db.update_draft(draft_id, status="pending", error=None)
+    return jsonify(ok=True)
+
+
+# ------------------------------------------------------------------ Gemini web hand-off
+def _export_response(items: list[dict], export_type: str):
+    filename, export, clipboard = handoff.build_export(items, export_type)
+    return jsonify(filename=filename, export=export, clipboard=clipboard)
+
+
+@app.post("/api/export/queue")
+def api_export_queue():
+    items = db.list_queue()
+    if not items:
+        return jsonify(error="Nothing is waiting for a draft."), 400
+    return _export_response(items, "inbox_queue")
+
+
+@app.post("/api/export/outreach")
+def api_export_outreach():
+    data = request.get_json() or {}
+    person, kinds, problems = _outreach_input(lambda k: str(data.get(k) or ""),
+                                              lambda k: list(data.get(k) or []))
+    if problems:
+        return jsonify(error=" ".join(problems)), 400
+    ids = []
+    for kind in kinds:
+        p = handoff.payload_from_outreach(person, kind)
+        ids.append(db.enqueue(p["key"], p["thread_id"], p, "Exported to the Gemini web app"))
+    return _export_response(db.get_queue_items(ids), "new_outreach")
+
+
+@app.post("/api/import")
+def api_import():
+    text = (request.get_json() or {}).get("text", "")
+    if not text.strip():
+        return jsonify(error="Paste Gemini's JSON answer first."), 400
+    try:
+        return jsonify(handoff.import_results(text))
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+
+
+@app.post("/api/queue/<int:qid>/discard")
+def api_queue_discard(qid: int):
+    if not db.get_queue_item(qid):
+        abort(404)
+    db.set_queue_status(qid, "discarded", "Discarded by you")
     return jsonify(ok=True)

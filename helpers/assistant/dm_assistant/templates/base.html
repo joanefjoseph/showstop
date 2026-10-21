@@ -41,5 +41,59 @@
 </nav>
 {% with msgs = get_flashed_messages() %}{% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}{% endwith %}
 {% block body %}{% endblock %}
+<script>
+const GEMINI_WEB_URL = 'https://gemini.google.com/app';
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+}
+
+function copyWithFallback(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  ta.remove();
+  return ok;
+}
+
+// Export: (1) download the JSON file, (2) copy instructions to the clipboard, (3) open Gemini.
+async function exportToGemini(url, body, statusEl) {
+  const show = (html, cls) => { if (statusEl) { statusEl.innerHTML = html; statusEl.className = 'status ' + (cls || ''); } };
+  show('Preparing export…');
+  let r, data = {};
+  try {
+    r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
+    data = await r.json();
+  } catch (e) { show('Export failed: ' + escapeHtml(e), 'err'); return false; }
+  if (!r.ok) { show(escapeHtml(data.error || 'Export failed.'), 'err'); return false; }
+
+  // Copy first, while this tab still has focus.
+  let copied = false;
+  try { await navigator.clipboard.writeText(data.clipboard); copied = true; }
+  catch (e) { copied = copyWithFallback(data.clipboard); }
+
+  // Download the JSON file.
+  const blob = new Blob([JSON.stringify(data.export, null, 2)], {type: 'application/json'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = data.filename;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+
+  // Open Gemini in a new tab.
+  const w = window.open(GEMINI_WEB_URL, '_blank');
+  if (w) w.opener = null;
+
+  const lines = [
+    `✓ Downloaded <b>${escapeHtml(data.filename)}</b> (${data.export.items.length} item(s))`,
+    copied ? '✓ Copied the instructions to your clipboard' : '⚠ Couldn\'t copy automatically - copy the text below',
+    w ? '✓ Opened Gemini in a new tab' : `⚠ Pop-up blocked - <a href="${GEMINI_WEB_URL}" target="_blank" rel="noopener">open Gemini</a>`,
+    'In Gemini: paste (Ctrl/Cmd+V), attach the downloaded file, send. Then copy Gemini\'s JSON answer and paste it into <b>Import results from Gemini web</b> on the Drafts page.',
+  ];
+  show(lines.join('<br>') + (copied ? '' : `<textarea rows="8" style="margin-top:8px">${escapeHtml(data.clipboard)}</textarea>`), 'ok');
+  return true;
+}
+</script>
 </body>
 </html>

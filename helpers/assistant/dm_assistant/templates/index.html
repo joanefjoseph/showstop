@@ -124,6 +124,38 @@
   </details>
   {% endif %}
 </div>
+{% if queue %}
+<div class="card" id="queue">
+  <div class="head">
+    <h3 style="margin:0">⏳ Waiting for a draft ({{ queue|length }})</h3>
+    <span class="muted">The Gemini API couldn't draft these. "Scan now" retries them with the API first.</span>
+  </div>
+  <table>
+    {% for q in queue %}
+    <tr id="q-{{ q.id }}">
+      <td>{{ "✉" if q.payload.channel == "email" else "in" }}</td>
+      <td><b>{{ q.payload.participant }}</b></td>
+      <td>{{ task_labels.get(q.payload.kind, q.payload.kind) }}</td>
+      <td class="muted">{{ q.reason or "" }}</td>
+      <td><button class="ghost" onclick="discardQueued({{ q.id }})">Discard</button></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <div class="actions">
+    <button class="primary" onclick="exportToGemini('/api/export/queue', {}, document.getElementById('export-status'))">⤴ Export to Gemini web</button>
+    <span class="muted">Downloads a JSON file, copies instructions to your clipboard and opens Gemini.</span>
+  </div>
+  <div class="status" id="export-status"></div>
+
+  <details style="margin-top:12px" open>
+    <summary><b>⤵ Import results from Gemini web</b></summary>
+    <p class="muted">In Gemini, use the copy button on its JSON code block, then paste the answer here.</p>
+    <textarea id="import-text" rows="6" placeholder='```json&#10;{"results": [ ... ]}&#10;```'></textarea>
+    <div class="actions"><button class="primary" onclick="importResults()">Import drafts</button></div>
+    <div class="status" id="import-status"></div>
+  </details>
+</div>
+{% endif %}
 
 <h2>Drafts to review ({{ drafts|length }})</h2>
 {% for d in drafts %}{{ card(d) }}{% else %}<p class="muted">Nothing to review. 🎉</p>{% endfor %}
@@ -267,6 +299,22 @@ async function replyAnyway(id) {
 
 async function skip(id) { const r = await api(`/api/drafts/${id}/skip`); if (r.ok) finish(id); }
 async function restore(id) { const r = await api(`/api/drafts/${id}/restore`); if (r.ok) location.reload(); }
+async function discardQueued(id) {
+  const r = await api(`/api/queue/${id}/discard`);
+  if (r.ok) document.getElementById('q-' + id).remove();
+}
+
+async function importResults() {
+  const el = document.getElementById('import-status');
+  const r = await api('/api/import', {text: document.getElementById('import-text').value});
+  if (!r.ok) { el.textContent = r.data.error || 'Import failed.'; el.className = 'status err'; return; }
+  const d = r.data;
+  el.textContent = `Imported ${d.created} draft(s).`
+    + (d.skipped ? ` ${d.skipped} were already drafted or discarded.` : '')
+    + (d.errors.length ? ' Problems: ' + d.errors.join('; ') : '');
+  el.className = 'status ' + (d.errors.length ? 'err' : 'ok');
+  if (d.created) setTimeout(() => location.reload(), 1500);
+}
 
 // Live character counter for connect notes
 document.querySelectorAll('.counter').forEach(el => {

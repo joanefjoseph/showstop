@@ -45,7 +45,19 @@ message using your company context; you review, edit and send it from the Drafts
 
   <div class="actions" style="margin-top:14px">
     <button class="primary" id="go">Draft message(s)</button>
-    <span class="muted">Each message type uses one Gemini request and takes a few seconds.</span>
+    <button type="button" onclick="exportOutreach()">⤴ Export to Gemini web instead</button>
+    <span class="muted">Use the export when your Gemini API quota is used up.</span>
   </div>
+  <div class="status" id="export-status"></div>
 </form>
+<script>
+async function exportOutreach() {
+  const form = document.querySelector('form');
+  if (!form.reportValidity()) return;
+  const fd = new FormData(form);
+  const body = Object.fromEntries([...fd.entries()].filter(([k]) => k !== 'kinds'));
+  body.kinds = fd.getAll('kinds');
+  await exportToGemini('/api/export/outreach', body, document.getElementById('export-status'));
+}
+</script>
 {% endblock %}

@@ -101,6 +101,16 @@ CREATE TABLE IF NOT EXISTS email_seen (
     outcome TEXT,
     seen_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS llm_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_key TEXT NOT NULL UNIQUE,
+    thread_id TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',   -- queued | done | discarded
+    reason TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 _UPDATABLE = {"draft", "status", "error", "sent_at", "summary", "rationale", "category",
@@ -326,3 +336,63 @@ def finish_run(run_id: int, status: str, found: int, created: int, error: str | 
 def recent_runs(limit: int = 5) -> list[dict[str, Any]]:
     with connect() as c:
         return [dict(r) for r in c.execute("SELECT * FROM runs ORDER BY id DESC LIMIT ?", (limit,))]
+
+# ---------------------------------------------------------------- "waiting for a draft" queue
+def _to_queue_item(row: sqlite3.Row) -> dict[str, Any]:
+    d = dict(row)
+    d["payload"] = json.loads(d.pop("payload_json"))
+    return d
+
+
+def enqueue(item_key: str, thread_id: str, payload: dict, reason: str) -> int:
+    ts = now()
+    with connect() as c:
+        # A newer snapshot of the same conversation replaces older queued ones.
+        c.execute(
+            "UPDATE llm_queue SET status='discarded', reason='Superseded by newer messages', updated_at=? "
+            "WHERE thread_id=? AND item_key != ? AND status='queued'",
+            (ts, thread_id, item_key),
+        )
+        c.execute(
+            """INSERT INTO llm_queue (item_key, thread_id, payload_json, status, reason, created_at, updated_at)
+               VALUES (?, ?, ?, 'queued', ?, ?, ?)
+               ON CONFLICT(item_key) DO UPDATE SET payload_json=excluded.payload_json, status='queued',
+                   reason=excluded.reason, updated_at=excluded.updated_at
+               WHERE llm_queue.status != 'done'""",
+            (item_key, thread_id, json.dumps(payload, ensure_ascii=False), reason, ts, ts),
+        )
+        return int(c.execute("SELECT id FROM llm_queue WHERE item_key=?", (item_key,)).fetchone()["id"])
+
+
+def list_queue() -> list[dict[str, Any]]:
+    with connect() as c:
+        rows = c.execute("SELECT * FROM llm_queue WHERE status='queued' ORDER BY id").fetchall()
+    return [_to_queue_item(r) for r in rows]
+
+
+def get_queue_item(qid: int) -> dict[str, Any] | None:
+    with connect() as c:
+        row = c.execute("SELECT * FROM llm_queue WHERE id=?", (qid,)).fetchone()
+    return _to_queue_item(row) if row else None
+
+
+def get_queue_items(ids: list[int]) -> list[dict[str, Any]]:
+    return [q for q in (get_queue_item(i) for i in ids) if q]
+
+
+def resolve_queue(item_key: str, thread_id: str) -> None:
+    """A draft now exists: mark this item done and drop older queued snapshots of the same thread."""
+    ts = now()
+    with connect() as c:
+        c.execute("UPDATE llm_queue SET status='done', updated_at=? WHERE item_key=?", (ts, item_key))
+        c.execute(
+            "UPDATE llm_queue SET status='discarded', reason='A newer draft exists', updated_at=? "
+            "WHERE thread_id=? AND status='queued'",
+            (ts, thread_id),
+        )
+
+
+def set_queue_status(qid: int, status: str, reason: str | None = None) -> None:
+    with connect() as c:
+        c.execute("UPDATE llm_queue SET status=?, reason=COALESCE(?, reason), updated_at=? WHERE id=?",
+                  (status, reason, now(), qid))
