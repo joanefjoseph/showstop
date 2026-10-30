@@ -29,3 +29,6 @@ venv/
 
 # Browser profile build output
 browser-profile/
+
+# generated pdfs
+*_pdfs/

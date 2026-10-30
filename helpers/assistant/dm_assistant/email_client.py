@@ -59,7 +59,7 @@ def _imap() -> Iterator[imaplib.IMAP4_SSL]:
     if not settings.email_enabled:
         raise EmailError("EMAIL_ADDRESS / EMAIL_PASSWORD are not set.")
     conn = imaplib.IMAP4_SSL(settings.email_imap_host, settings.email_imap_port,
-                             ssl_context=ssl.create_default_context())
+                             ssl_context=ssl.create_default_context(), timeout=60)
     try:
         conn.login(settings.email_address, settings.email_password)
         yield conn
