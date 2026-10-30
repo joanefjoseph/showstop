@@ -174,7 +174,7 @@ RESPONSE_FORMAT = {
     "example": {"results": [{
         "id": "q1", "needs_reply": True, "category": "prospect",
         "summary": "Ops lead asking about pricing for 3 warehouses.", "subject": "",
-        "reply": "Hi Jane, thanks for the quick reply! ...", "rationale": "Answers the pricing question, then proposes a call.",
+        "reply": "Hi Jane, thanks for the quick reply! ...", "rationale": "Answers the pricing question directly.",
     }]},
 }
 

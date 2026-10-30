@@ -60,7 +60,8 @@ You draft messages on behalf of {me} for two channels: LinkedIn direct messages 
 ## Rules
 1. Write in first person as {me}: warm, direct, concise. Follow the channel format given in each request. \
 No emojis unless the other person uses them.
-2. Respond to what the person actually said or asked first, then move toward the goals when it fits. \
+2. Respond to what the person actually said or asked first; only where it fits naturally, move toward the \
+goals. Not every message needs a call to action. \
 Don't pitch people who clearly aren't prospects (recruiters, investors, vendors selling to us, friends, \
 existing customers with a support question); answer appropriately for who they are.
 3. Only state facts about the company, product, pricing, customers, timelines or metrics that appear in the \
@@ -83,6 +84,9 @@ it), mention in `summary` anything {me} should still look at or act on (e.g. "in
    If a human plausibly expects an answer, set needs_reply=true.
 9. Some requests are follow-ups to an accepted LinkedIn connection request; for those, follow the specific \
 instructions in the request.
+10. {me}'s own instructions - the guidance in the context above, and any "Instruction from {me}" line in a \
+request - take precedence over the default tone, length, call-to-action and meeting guidance (rules 1, 2 \
+and 5) and over the format notes in a request. They never override rules 3, 4 and 7.
 """
 
 _client: genai.Client | None = None
@@ -95,7 +99,10 @@ def _get_client() -> genai.Client:
     if _client is None:
         if not settings.gemini_api_key:
             raise RuntimeError("GEMINI_API_KEY is not set (get one at https://aistudio.google.com/apikey)")
-        _client = genai.Client(api_key=settings.gemini_api_key)
+        _client = genai.Client(
+            api_key=settings.gemini_api_key,
+            http_options=types.HttpOptions(timeout=120_000),  # 2 min per request
+        )
     return _client
 
 
@@ -120,11 +127,17 @@ def _next_week_weekdays() -> list[str]:
 
 
 def _meeting_instruction() -> str:
-    if settings.meeting_link:
-        return (f"offer this booking link: {settings.meeting_link} - optionally also suggest two time "
-                f"windows as placeholders like [Tue 2pm] / [Thu 10am].")
-    return ("suggest two concrete time windows as placeholders like [Tue 2pm] / [Thu 10am] "
-            "for the user to fill in.")
+    me = _me()
+    link = (f" If a booking link fits, you may share {me}'s: {settings.meeting_link}."
+            if settings.meeting_link else "")
+    return (
+        "only bring up a meeting when the conversation or the goals genuinely call for one - many messages "
+        "(answers, thank-yous, quick questions, wrap-ups, replies to people who aren't prospects) should "
+        "not ask for a call at all. When you do suggest one, keep it open by default: ask whether they'd "
+        "be up for a short call and invite them to suggest a time that suits them. Do not propose "
+        f"specific days or times unless {me} asks for that or the other person asked for times; in that "
+        f"case use placeholders for {me} to fill in (e.g. [day/time]) instead of inventing them." + link
+    )
 
 
 def build_system_prompt(context: dict) -> str:
@@ -156,7 +169,8 @@ def _revision_parts(instruction: str | None, previous_draft: str | None, force_r
     if previous_draft:
         parts += ["", "Current draft to revise:", "<draft>", previous_draft, "</draft>"]
     if instruction:
-        parts += ["", f"Instruction from {_me()} for this version: {instruction}"]
+        parts += ["", f"Instruction from {_me()} for this version (follow it even where it differs from "
+                      f"the default meeting, length or tone guidance): {instruction}"]
     return parts
 
 
@@ -188,13 +202,7 @@ def build_followup_prompt(participant: str, messages: list[dict], instruction: s
     first_name = participant.split()[0] if participant.strip() else "there"
     note = messages[-1]["text"] if messages else ""
     days = _next_week_weekdays()
-    if settings.meeting_link:
-        ask = (f"Share this booking link: {settings.meeting_link} and ask whether a short call in the next "
-               f"week works (the coming weekdays are: {', '.join(days)}).")
-    else:
-        ask = (f"Propose two specific days from the next week - choose from: {', '.join(days)} - with the exact "
-               f"times left as placeholders like [10am] for {me} to fill in, and invite them to suggest "
-               f"another time that week if those don't work.")
+    link = f" You may share {me}'s booking link: {settings.meeting_link}." if settings.meeting_link else ""
     return "\n".join([
         f"Today is {datetime.now():%A, %B %d, %Y}.",
         "Channel: LinkedIn DM.",
@@ -208,7 +216,11 @@ def build_followup_prompt(participant: str, messages: list[dict], instruction: s
         "2. Briefly introduce the company and product (2-3 sentences) using only facts from the context, "
         "framed around why it's relevant to them. Use anything the note reveals about them, but don't "
         "repeat the note.",
-        f"3. Ask to set up a short meeting within the next week. {ask}",
+        f"3. Invite them to a short conversation, following rule 5 and {me}'s follow-up guidance in the "
+        f"context (if that guidance describes a different approach, follow it). By default, ask whether "
+        f"they'd be open to a quick call and let them suggest a time that works for them.{link} Only name "
+        f"specific days if {me}'s guidance or instruction asks for that - then choose from the coming "
+        f"weekdays ({', '.join(days)}) and leave exact times as placeholders for {me}.",
         "Constraints: under ~120 words; don't mention how long ago the invitation was sent; don't imply they "
         "replied or already expressed interest. Set needs_reply=true and category to your best guess "
         "(usually 'prospect').",
@@ -441,7 +453,8 @@ def build_outreach_prompt(context: dict, meta: dict, kind: str, instruction: str
         fmt = [
             "Format: a first LinkedIn direct message to someone who can already be messaged.",
             "- 3-5 short sentences, under ~90 words. No subject line, no signature block.",
-            "- End with ONE low-friction ask (usually a short call - see the meeting rule).",
+            "- End with ONE low-friction next step that matches the outcome in <reason> (e.g. a reply, "
+            "an introduction, or a short call if that's what {me} wants - see rule 5).".format(me=me),
         ]
     else:
         if settings.email_signature:
@@ -453,7 +466,7 @@ def build_outreach_prompt(context: dict, meta: dict, kind: str, instruction: str
             "- The very first line of `reply` must be 'Subject: <subject line>' (at most ~7 words, specific to "
             "them, no clickbait, no ALL CAPS), then a blank line, then the body.",
             "- Body: plain text (no markdown), 80-140 words, greeting with their first name, 2-3 short "
-            "paragraphs, ONE clear ask (usually a short call - see the meeting rule).",
+            "paragraphs, ONE clear ask that matches the outcome in <reason> (see rule 5 if it's a call).",
             "- No 'I hope this email finds you well', no apologising for reaching out. " + signoff,
         ]
 
@@ -490,6 +503,8 @@ def build_outreach_prompt(context: dict, meta: dict, kind: str, instruction: str
         "- Set needs_reply=true. `category`: prospect or partner. `summary`: one line describing the angle you "
         "chose. `rationale`: why this angle should land with this person.",
     ]
+    if meta.get("instruction"):
+        parts += ["", f"Instruction from {me} for this contact: {meta['instruction']}"]
     if previous_subject and kind == OUTREACH_EMAIL:
         parts += ["", f"Current subject line: {previous_subject}"]
     parts += _revision_parts(instruction, _strip_signature(previous_draft), False)

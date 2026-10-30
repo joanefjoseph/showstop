@@ -87,7 +87,8 @@ def _render_outreach(form, selected, status: int = 200):
 
 def _outreach_input(get, getlist) -> tuple[dict, list[str], list[str]]:
     kinds = [k for k in getlist("kinds") if k in llm.OUTREACH_KINDS]
-    person = {k: (get(k) or "").strip() for k in ("name", "email", "linkedin_url", "role", "about", "reason")}
+    person = {k: (get(k) or "").strip()
+              for k in ("name", "email", "linkedin_url", "role", "about", "reason", "instruction")}
     if person["linkedin_url"] and not person["linkedin_url"].startswith(("http://", "https://")):
         person["linkedin_url"] = "https://" + person["linkedin_url"]
     problems = []

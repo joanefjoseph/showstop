@@ -87,6 +87,7 @@ def _scan_email(context: dict, state: dict, problems: list[str]) -> tuple[int, i
 def run_scan(trigger: str = "manual") -> dict:
     """Read LinkedIn + email -> draft (or queue for the Gemini web app). Never sends anything."""
     if not _run_lock.acquire(blocking=False):
+        log.warning("Scan (%s) skipped - a previous scan is still running", trigger)
         return {"status": "already_running"}
     run_id = db.start_run(trigger)
     found = drafted = queued = 0

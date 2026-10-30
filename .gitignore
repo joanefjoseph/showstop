@@ -32,3 +32,6 @@ browser-profile/
 
 # generated pdfs
 *_pdfs/
+
+# VS Code settings
+.vscode/
