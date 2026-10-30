@@ -122,20 +122,35 @@ def _short(e: Exception) -> str:
     return text.strip().splitlines()[0][:200] if text.strip() else e.__class__.__name__
 
 
+def _server_errors_piling_up(e: Exception, state: dict) -> bool:
+    if isinstance(e, genai_errors.APIError) and (e.code or 0) >= 500:
+        state["server_errors"] = state.get("server_errors", 0) + 1
+        return state["server_errors"] >= 2
+    return False
+
+
 def draft_or_queue(context: dict, p: dict, state: dict, problems: list[str]) -> str:
     """Draft with the API, or queue for the Gemini web app. Returns 'drafted' or 'queued'."""
+    tried = state.setdefault("tried", set())
+    if p["key"] in tried:
+        return "queued"      # already attempted earlier in this run (queue drain) - don't call Gemini twice
+    tried.add(p["key"])
     if state.get("llm_down"):
         db.enqueue(p["key"], p["thread_id"], p, state["llm_down"])
         return "queued"
     try:
         result, subject = draft_with_api(context, p)
+        state["server_errors"] = 0
     except Exception as e:
-        if is_llm_unavailable(e):
+        if is_llm_unavailable(e) or _server_errors_piling_up(e, state):
             state["llm_down"] = f"Gemini API unavailable: {_short(e)}"
             log.warning("%s - queuing the rest for manual drafting", state["llm_down"])
             db.enqueue(p["key"], p["thread_id"], p, state["llm_down"])
         else:
-            log.exception("Drafting failed for %s", p["participant"])
+            if isinstance(e, genai_errors.APIError):
+                log.warning("Drafting failed for %s: %s %s", p["participant"], e.code, _short(e))
+            else:
+                log.exception("Drafting failed for %s", p["participant"])
             problems.append(f"{p['participant']}: {_short(e)}")
             db.enqueue(p["key"], p["thread_id"], p, f"Drafting failed: {_short(e)}")
         return "queued"
@@ -187,17 +202,21 @@ CLIPBOARD_TEMPLATE = """I've attached {filename}, exported from my LinkedIn + em
 Please complete every item following system_prompt and the item's instructions, then answer with ONE ```json code block in the response_format (one result per item id) so I can import the drafts back into my app. These are drafts for me to review - nothing is sent automatically."""
 
 
-def prompt_for(context: dict, p: dict) -> str:
+def prompt_for(context: dict, p: dict, instruction: str | None = None,
+               previous_draft: str | None = None, force_reply: bool = False) -> str:
     """The exact user prompt the API call would have used for this payload."""
     kind, meta = p["kind"], p["meta"]
     if kind in llm.OUTREACH_KINDS:
-        return llm.build_outreach_prompt(context, meta, kind, None, None, None)
+        return llm.build_outreach_prompt(context, meta, kind, instruction, previous_draft,
+                                         meta.get("subject") or None)
     notes = llm._notes_block(meta.get("person_notes"))
     if p["channel"] == "email":
-        return llm.build_email_prompt(p["participant"], p["messages"], meta, None, None, False) + notes
+        return llm.build_email_prompt(p["participant"], p["messages"], meta, instruction,
+                                      previous_draft, force_reply) + notes
     if kind == llm.KIND_FOLLOWUP:
-        return llm.build_followup_prompt(p["participant"], p["messages"], None, None) + notes
-    return llm.build_reply_prompt(p["participant"], p["messages"], None, None, False) + notes
+        return llm.build_followup_prompt(p["participant"], p["messages"], instruction, previous_draft) + notes
+    return llm.build_reply_prompt(p["participant"], p["messages"], instruction,
+                                  previous_draft, force_reply) + notes
 
 
 _EMAIL_FIELDS = ("subject", "to", "cc", "attachments", "signals", "quoted")
@@ -229,7 +248,7 @@ def build_export(items: list[dict], export_type: str) -> tuple[str, dict, str]:
             "id": f"q{q['id']}",
             "task": TASK_LABELS.get(p["kind"], p["kind"]),
             "channel": p["channel"],
-            "instructions": prompt_for(context, p),
+            "instructions": prompt_for(context, p, **q.get("revision", {})),
             "data": _item_data(p),
         })
     export = {

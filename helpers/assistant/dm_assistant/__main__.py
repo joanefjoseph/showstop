@@ -20,6 +20,8 @@ def main() -> None:
     sub.add_parser("email-test", help="Check IMAP/SMTP login and show the detected Sent folder")
     sub.add_parser("models", help="List Gemini models available to your API key")
     sub.add_parser("llm-test", help="Send one tiny test request to the configured Gemini model")
+    sub.add_parser("gemini-login", help="Sign in to the Gemini web app once (dedicated browser profile)")
+    sub.add_parser("gemini-test", help="Send one tiny test prompt through the Gemini web app")
     c = sub.add_parser("context", help="View/update your context from the terminal")
     csub = c.add_subparsers(dest="action", required=True)
     csub.add_parser("show")
@@ -75,9 +77,21 @@ def main() -> None:
             print(f"Saved {args.key}.")
         return
 
+    if cmd == "gemini-login":
+        from . import gemini_web
+        ok = gemini_web.interactive_login()
+        print("✓ Gemini web is ready." if ok else "✗ Could not confirm you're signed in to Gemini; try again.")
+        sys.exit(0 if ok else 1)
+
+    if cmd == "gemini-test":
+        from . import gemini_web
+        print(gemini_web.self_test())
+        return
+
     # serve
-    if not settings.gemini_api_key:
-        print("⚠️  GEMINI_API_KEY is not set - drafting will fail.")
+    if settings.use_api and not settings.gemini_api_key:
+        print("⚠ GEMINI_API_KEY is not set - API drafting will fail"
+              + (" (the Gemini web app will be used instead)." if settings.use_web else "."))
     if not settings.my_name:
         print("⚠️  LINKEDIN_MY_NAME is not set - the assistant can't tell your messages from theirs.")
     from . import scheduler

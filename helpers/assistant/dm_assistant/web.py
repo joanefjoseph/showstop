@@ -9,7 +9,7 @@ from urllib.parse import quote_plus, urlparse
 
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, url_for
 
-from . import db, email_client, handoff, linkedin, llm, pipeline, scheduler
+from . import db, email_client, gemini_web, handoff, linkedin, llm, pipeline, scheduler
 from .config import settings
 
 log = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def index():
         flagged=[d for d in pending if not d["needs_reply"]],
         recent=db.list_drafts(["sent", "skipped", "superseded", "no_reply"], limit=30),
         runs=db.recent_runs(5),
-        running=pipeline.is_running(),
+        running=pipeline.is_running() or gemini_web.is_busy(),
         next_runs=scheduler.next_run_times(),
         linkedin_send=settings.enable_direct_send,
         email_send=settings.email_enabled,
@@ -118,15 +118,21 @@ def outreach_page():
 
     context, state, errs = db.get_context(), {}, []
     drafted = queued = 0
+    keys = []
     for kind in kinds:
         p = handoff.payload_from_outreach(person, kind)
+        keys.append(p["key"])
         if handoff.draft_or_queue(context, p, state, errs) == "drafted":
             drafted += 1
         else:
             queued += 1
     if drafted:
         flash(f"Drafted {drafted} message(s) for {person['name']} - review below.")
-    if queued:
+    if queued and settings.use_web:
+        gemini_web.run_in_background([q["id"] for q in db.list_queue() if q["item_key"] in keys])
+        flash(f"Drafting {queued} message(s) for {person['name']} in Gemini - "
+              f"they'll appear here in a minute or two.")
+    elif queued:
         flash(f"{queued} message(s) couldn't be drafted with the API "
               f"({state.get('llm_down') or '; '.join(errs) or 'error'}). They're under "
               f"'Waiting for a draft' - use Export to Gemini web.")
@@ -155,7 +161,7 @@ def _save_fields(d: dict, data: dict) -> None:
 
 @app.get("/api/status")
 def api_status():
-    return jsonify(running=pipeline.is_running())
+    return jsonify(running=pipeline.is_running() or gemini_web.is_busy())
 
 
 @app.post("/api/drafts/<int:draft_id>/save")
@@ -167,29 +173,42 @@ def api_save(draft_id: int):
     return jsonify(ok=True)
 
 
+def _redraft(d: dict, meta: dict, instruction, previous, force_reply):
+    if settings.use_api:
+        try:
+            if d["kind"] in llm.OUTREACH_KINDS:
+                return llm.draft_outreach(db.get_context(), meta, d["kind"], instruction=instruction,
+                                          previous_draft=previous,
+                                          previous_subject=meta.get("subject") or None)
+            return llm.draft_reply(db.get_context(), d["participant"], d["messages"],
+                                   kind=d["kind"], channel=d["channel"], meta=meta,
+                                   instruction=instruction, previous_draft=previous,
+                                   force_reply=force_reply), None
+        except Exception as e:
+            if not settings.use_web:
+                raise
+            log.warning("Gemini API redraft failed (%s) - using the Gemini web app", e)
+    p = {"kind": d["kind"], "channel": d["channel"], "participant": d["participant"],
+         "messages": d["messages"], "meta": meta}
+    r, subject = gemini_web.draft_single(p, instruction=instruction, previous_draft=previous,
+                                         force_reply=force_reply)
+    return r, (subject or None)
+
+
 @app.post("/api/drafts/<int:draft_id>/regenerate")
 def api_regenerate(draft_id: int):
     d = _draft_or_404(draft_id)
     data = request.get_json() or {}
     instruction = (data.get("instruction") or "").strip() or None
     previous = (data.get("text") or d["draft"]) or None
-    subject = None
+    meta = dict(d["meta"])
+    if data.get("subject"):
+        meta["subject"] = data["subject"]
     try:
-        if d["kind"] in llm.OUTREACH_KINDS:
-            r, subject = llm.draft_outreach(
-                db.get_context(), d["meta"], d["kind"], instruction=instruction, previous_draft=previous,
-                previous_subject=(data.get("subject") or d["meta"].get("subject") or None),
-            )
-        else:
-            r = llm.draft_reply(
-                db.get_context(), d["participant"], d["messages"],
-                kind=d["kind"], channel=d["channel"], meta=d["meta"],
-                instruction=instruction, previous_draft=previous,
-                force_reply=bool(data.get("force_reply")),
-            )
+        r, subject = _redraft(d, meta, instruction, previous, bool(data.get("force_reply")))
     except Exception as e:
         log.exception("Regenerate failed")
-        return jsonify(error=f"Gemini error: {e}"), 502
+        return jsonify(error=f"Drafting failed: {e}"), 502
     db.update_draft(draft_id, draft=r.reply, summary=r.summary, rationale=r.rationale,
                     category=r.category, needs_reply=int(r.needs_reply), error=None)
     if subject:
@@ -351,4 +370,13 @@ def api_queue_discard(qid: int):
     if not db.get_queue_item(qid):
         abort(404)
     db.set_queue_status(qid, "discarded", "Discarded by you")
+    return jsonify(ok=True)
+
+@app.post("/api/queue/draft-web")
+def api_queue_draft_web():
+    if not db.list_queue():
+        return jsonify(error="Nothing is waiting for a draft."), 400
+    if gemini_web.is_busy():
+        return jsonify(error="Gemini is already drafting - this page refreshes when it's done."), 409
+    gemini_web.run_in_background()
     return jsonify(ok=True)

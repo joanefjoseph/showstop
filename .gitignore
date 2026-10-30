@@ -29,6 +29,7 @@ venv/
 
 # Browser profile build output
 browser-profile/
+gemini-chrome/
 
 # generated pdfs
 *_pdfs/

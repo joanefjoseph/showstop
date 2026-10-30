@@ -4,7 +4,7 @@ import logging
 import threading
 import webbrowser
 
-from . import db, email_client, handoff, linkedin
+from . import db, email_client, gemini_web, handoff, linkedin
 from .config import settings
 
 log = logging.getLogger(__name__)
@@ -103,7 +103,8 @@ def run_scan(trigger: str = "manual") -> dict:
         context = db.get_context()
         if "company" not in context:
             log.warning("No company context set yet - drafts will be generic. Fill in the Context page.")
-        drafted += _drain_queue(context, state, problems)
+        if settings.use_api:
+            drafted += _drain_queue(context, state, problems)
         for name, _, scan in enabled:
             try:
                 f, d, q = scan(context, state, problems)
@@ -113,6 +114,10 @@ def run_scan(trigger: str = "manual") -> dict:
                 log.exception("%s scan failed", name)
                 problems.append(f"{name} scan failed: {e}")
                 failed += 1
+        if settings.use_web and db.list_queue():
+            res = gemini_web.process_queue()
+            drafted += res["created"]
+            problems += res["errors"]
 
         notes = list(problems)
         waiting = len(db.list_queue())

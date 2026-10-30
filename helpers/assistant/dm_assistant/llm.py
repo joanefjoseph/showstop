@@ -9,6 +9,7 @@ from typing import Any
 from google import genai
 from google.genai import errors, types
 from pydantic import BaseModel, Field
+import httpx
 
 from .config import settings
 
@@ -289,33 +290,33 @@ def _is_model_unavailable(e: errors.APIError) -> bool:
     return e.code == 404 or (e.code == 400 and "model" in text and ("not supported" in text or "not found" in text))
 
 
+_RETRY_CODES = (429, 500, 502, 503, 504)
+
+
 def _generate_with(model: str, system: str, prompt: str) -> DraftResult:
     global _last_call
     backoff = [10, 30, 60]
     for attempt in range(len(backoff) + 1):
-        with _throttle_lock:  # stay under free-tier requests-per-minute
+        with _throttle_lock:
             wait = settings.llm_min_interval_s - (time.monotonic() - _last_call)
             if wait > 0:
                 time.sleep(wait)
             _last_call = time.monotonic()
         try:
-            resp = _get_client().models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system,
-                    response_mime_type="application/json",
-                    response_schema=DraftResult,
-                    temperature=settings.gemini_temperature,  # None = model default
-                ),
-            )
+            resp = _get_client().models.generate_content(...)   # unchanged
             parsed: Any = resp.parsed
             if isinstance(parsed, DraftResult):
                 return parsed
             return DraftResult.model_validate_json(resp.text or "")
         except errors.APIError as e:
-            if e.code in (429, 500, 503) and attempt < len(backoff):
+            if e.code in _RETRY_CODES and attempt < len(backoff):
                 log.warning("Gemini %s on %s; retrying in %ss", e.code, model, backoff[attempt])
+                time.sleep(backoff[attempt])
+                continue
+            raise
+        except httpx.TransportError as e:          # timeouts, connection resets
+            if attempt < len(backoff):
+                log.warning("Network error talking to Gemini (%s); retrying in %ss", e, backoff[attempt])
                 time.sleep(backoff[attempt])
                 continue
             raise

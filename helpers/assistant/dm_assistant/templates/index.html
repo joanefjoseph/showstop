@@ -105,7 +105,7 @@
 <div class="card">
   <div class="head">
     <form method="post" action="{{ url_for('run_now') }}" style="margin:0">
-      <button class="primary" {% if running %}disabled{% endif %}>{{ "Scanning…" if running else "Scan LinkedIn + email now" }}</button>
+      <button class="primary" {% if running %}disabled{% endif %}>{{ "Working…" if running else "Scan LinkedIn + email now" }}</button>
     </form>
     <a href="{{ url_for('outreach_page') }}"><button type="button">🚀 New outreach</button></a>
     <span class="muted">
@@ -128,7 +128,7 @@
 <div class="card" id="queue">
   <div class="head">
     <h3 style="margin:0">⏳ Waiting for a draft ({{ queue|length }})</h3>
-    <span class="muted">The Gemini API couldn't draft these. "Scan now" retries them with the API first.</span>
+    <span class="muted">Not drafted yet - the reason is shown next to each item. The manual export below still works.</span>
   </div>
   <table>
     {% for q in queue %}
@@ -144,6 +144,10 @@
   <div class="actions">
     <button class="primary" onclick="exportToGemini('/api/export/queue', {}, document.getElementById('export-status'))">⤴ Export to Gemini web</button>
     <span class="muted">Downloads a JSON file, copies instructions to your clipboard and opens Gemini.</span>
+  </div>
+  <div class="actions">
+    <button class="primary" onclick="draftQueueInGemini(this)">✨ Draft these in Gemini now</button>
+    <button onclick="exportToGemini('/api/export/queue', {}, document.getElementById('export-status'))">Export to Gemini web (manual)</button>
   </div>
   <div class="status" id="export-status"></div>
 
@@ -314,6 +318,13 @@ async function importResults() {
     + (d.errors.length ? ' Problems: ' + d.errors.join('; ') : '');
   el.className = 'status ' + (d.errors.length ? 'err' : 'ok');
   if (d.created) setTimeout(() => location.reload(), 1500);
+}
+
+async function draftQueueInGemini(btn) {
+  btn.disabled = true;
+  const r = await api('/api/queue/draft-web');
+  if (r.ok) location.reload();            // the page polls while Gemini works, then reloads
+  else { btn.disabled = false; alert(r.data.error || 'Could not start Gemini drafting.'); }
 }
 
 // Live character counter for connect notes

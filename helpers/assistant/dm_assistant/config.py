@@ -80,6 +80,19 @@ class Settings:
     # Max length of connect notes the assistant WRITES (LinkedIn's limit)
     connect_note_limit: int = int(_env("LINKEDIN_CONNECT_NOTE_LIMIT", "300"))
 
+    # --- drafting backend ---
+    # web  = Gemini web app with your signed-in Google account (no API key needed)
+    # api  = Gemini API only (old behaviour: queue + manual export when it fails)
+    # auto = try the API first, send whatever it couldn't draft to the Gemini web app
+    draft_backend: str = _env("DRAFT_BACKEND", "web").lower()
+    gemini_web_url: str = _env("GEMINI_WEB_URL", "https://gemini.google.com/app")
+    gemini_web_browser: str = _env("GEMINI_WEB_BROWSER")          # path to chrome.exe / msedge.exe
+    gemini_web_port: int = int(_env("GEMINI_WEB_DEBUG_PORT", "9333"))
+    gemini_web_model: str = _env("GEMINI_WEB_MODEL")              # e.g. "Pro"; empty = current choice
+    gemini_web_batch_size: int = int(_env("GEMINI_WEB_BATCH_SIZE", "8"))
+    gemini_web_timeout_s: int = int(_env("GEMINI_WEB_TIMEOUT_SECONDS", "600"))
+    gemini_web_headless: bool = _bool("GEMINI_WEB_HEADLESS", False)
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "assistant.db"
@@ -113,5 +126,17 @@ class Settings:
     @property
     def email_from_name(self) -> str:
         return self.email_display_name or (self.display_name if self.my_name else "")
+
+    @property
+    def gemini_profile_dir(self) -> Path:
+        return self.data_dir / "gemini-chrome"
+
+    @property
+    def use_api(self) -> bool:
+        return self.draft_backend in ("api", "auto")
+
+    @property
+    def use_web(self) -> bool:
+        return self.draft_backend in ("web", "auto")
 
 settings = Settings()

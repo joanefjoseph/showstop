@@ -21,6 +21,7 @@ from email.message import EmailMessage
 from email.utils import formatdate, getaddresses, make_msgid, parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
 from typing import Callable, Iterator
+import truststore
 
 from .config import settings
 
@@ -54,12 +55,17 @@ class SendResult:
 
 
 # ------------------------------------------------------------------ connections
+def _ssl_context() -> ssl.SSLContext:
+    """Verify certificates with Windows' own machinery (downloads missing intermediates/roots
+    on demand), instead of OpenSSL's snapshot of the Windows store."""
+    return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
 @contextmanager
 def _imap() -> Iterator[imaplib.IMAP4_SSL]:
     if not settings.email_enabled:
         raise EmailError("EMAIL_ADDRESS / EMAIL_PASSWORD are not set.")
     conn = imaplib.IMAP4_SSL(settings.email_imap_host, settings.email_imap_port,
-                             ssl_context=ssl.create_default_context(), timeout=60)
+                             ssl_context=_ssl_context())
     try:
         conn.login(settings.email_address, settings.email_password)
         yield conn
@@ -72,7 +78,7 @@ def _imap() -> Iterator[imaplib.IMAP4_SSL]:
 
 @contextmanager
 def _smtp() -> Iterator[smtplib.SMTP]:
-    ctx = ssl.create_default_context()
+    ctx = _ssl_context()
     host, port = settings.email_smtp_host, settings.email_smtp_port
     server = (smtplib.SMTP_SSL(host, port, context=ctx, timeout=30) if port == 465
               else smtplib.SMTP(host, port, timeout=30))
