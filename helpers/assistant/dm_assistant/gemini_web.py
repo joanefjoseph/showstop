@@ -108,12 +108,20 @@ def _gemini_page() -> Iterator[Page]:
                     raise GeminiWebError("The Gemini browser didn't open its debugging port.")
                 time.sleep(0.3)
         browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{settings.gemini_web_port}")
+        # Hard watchdog: if anything below hangs, kill the browser we started so nothing is left open.
+        watchdog = None
+        if proc is not None:
+            watchdog = threading.Timer(settings.gemini_web_timeout_s * 4 + 120, proc.kill)
+            watchdog.daemon = True
+            watchdog.start()
         ctx = browser.contexts[0] if browser.contexts else browser.new_context()
         page = ctx.new_page()
         page.set_default_timeout(30_000)
         try:
             yield page
         finally:
+            if watchdog is not None:
+                watchdog.cancel()
             try:
                 page.close()
             except Exception:
@@ -124,7 +132,7 @@ def _gemini_page() -> Iterator[Page]:
                 except Exception:
                     pass
                 try:
-                    proc.wait(timeout=15)
+                    proc.wait(timeout=10)
                 except subprocess.TimeoutExpired:
                     proc.kill()
             try:
@@ -205,20 +213,31 @@ def _send(page: Page, text: str) -> None:
         box.press("Enter")
 
 
-def _wait_for_answer(page: Page, before: int) -> None:
-    """Done = a new answer exists, the Stop button is gone and the text has stopped growing."""
-    deadline = time.time() + settings.gemini_web_timeout_s
+def _wait_for_answer(page: Page, before: int, timeout_s: int | None = None) -> None:
+    """Done = a new answer exists and its text has stopped growing.
+
+    The Stop button is a hint only: if the text has been stable for ~10 s we accept the answer even if
+    the Stop selector still matches something (that previously made this wait forever).
+    """
+    timeout_s = timeout_s or settings.gemini_web_timeout_s
+    deadline = time.time() + timeout_s
     last_len, stable = -1, 0
     while time.time() < deadline:
         time.sleep(2)
         s = page.evaluate(_STATE_JS, _sel())
-        if s["count"] <= before or s["busy"] or s["len"] == 0 or s["len"] != last_len:
+        if s["count"] <= before or s["len"] == 0 or s["len"] != last_len:
             last_len, stable = s["len"], 0
             continue
         stable += 1
-        if stable >= 2:
+        if (not s["busy"] and stable >= 2) or stable >= 5:
             return
-    raise GeminiWebError(f"Gemini didn't finish answering within {settings.gemini_web_timeout_s}s.")
+    try:
+        shot = settings.data_dir / "gemini-timeout.png"
+        page.screenshot(path=str(shot))
+        log.error("Gemini timed out; screenshot saved to %s", shot)
+    except Exception:
+        pass
+    raise GeminiWebError(f"Gemini didn't finish answering within {timeout_s}s.")
 
 
 PROMPT_TEMPLATE = """I'm sending you an export from my LinkedIn + email drafting assistant. The JSON at the end contains:
@@ -241,11 +260,11 @@ def _web_prompt(export: dict) -> str:
     return PROMPT_TEMPLATE.format(count=len(export["items"]), what=what, payload=payload)
 
 
-def _ask_raw(page: Page, prompt: str) -> str:
+def _ask_raw(page: Page, prompt: str, timeout_s: int | None = None) -> str:
     _open_chat(page)  # a fresh chat for every batch
     before = page.locator(G.RESPONSE).count()
     _send(page, prompt)
-    _wait_for_answer(page, before)
+    _wait_for_answer(page, before, timeout_s)
     answer = page.evaluate(_ANSWER_JS, _sel())
     if not answer.strip():
         raise GeminiWebError("Gemini returned an empty answer.")
@@ -365,5 +384,5 @@ def interactive_login() -> bool:
 def self_test() -> str:
     with _gemini_page() as page:
         answer = _ask_raw(page, 'Connectivity test. Reply with only this code block:\n```json\n'
-                                '{"results":[{"id":"q0","reply":"Hello!"}]}\n```')
+                                '{"results":[{"id":"q0","reply":"Hello!"}]}\n```', timeout_s=120)
     return f"OK - Gemini answered and the reply was parsed: {handoff.parse_results(answer)[0]}"

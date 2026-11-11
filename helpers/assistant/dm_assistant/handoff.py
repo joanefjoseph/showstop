@@ -112,9 +112,9 @@ def is_llm_unavailable(e: Exception) -> bool:
     """Errors where retrying other messages with the API right now is pointless."""
     if isinstance(e, llm.ModelUnavailableError):
         return True
-    if isinstance(e, genai_errors.APIError):
+    if isinstance(e, (genai_errors.APIError, llm.LLMError)):
         return e.code in (401, 403, 429) or "api key" in str(e).lower()
-    return isinstance(e, RuntimeError) and "GEMINI_API_KEY" in str(e)
+    return isinstance(e, RuntimeError) and ("GEMINI_API_KEY" in str(e) or "OPENAI_API_KEY" in str(e))
 
 
 def _short(e: Exception) -> str:
@@ -123,7 +123,7 @@ def _short(e: Exception) -> str:
 
 
 def _server_errors_piling_up(e: Exception, state: dict) -> bool:
-    if isinstance(e, genai_errors.APIError) and (e.code or 0) >= 500:
+    if isinstance(e, (genai_errors.APIError, llm.LLMError)) and (e.code or 0) >= 500:
         state["server_errors"] = state.get("server_errors", 0) + 1
         return state["server_errors"] >= 2
     return False
@@ -143,11 +143,11 @@ def draft_or_queue(context: dict, p: dict, state: dict, problems: list[str]) -> 
         state["server_errors"] = 0
     except Exception as e:
         if is_llm_unavailable(e) or _server_errors_piling_up(e, state):
-            state["llm_down"] = f"Gemini API unavailable: {_short(e)}"
+            state["llm_down"] = f"LLM API unavailable: {_short(e)}"
             log.warning("%s - queuing the rest for manual drafting", state["llm_down"])
             db.enqueue(p["key"], p["thread_id"], p, state["llm_down"])
         else:
-            if isinstance(e, genai_errors.APIError):
+            if isinstance(e, (genai_errors.APIError, llm.LLMError)):
                 log.warning("Drafting failed for %s: %s %s", p["participant"], e.code, _short(e))
             else:
                 log.exception("Drafting failed for %s", p["participant"])

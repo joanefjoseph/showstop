@@ -93,8 +93,8 @@ You choose the drafting backend with `DRAFT_BACKEND`:
   - Gemini's JSON answer is read back from the page and imported as normal drafts. The browser window closes when it's done.
   - Regenerate, "Write a reply anyway" and New outreach use the same route.
 - **Resilient API drafting.**
-  - Each request times out after 2 minutes.
-  - Overload and timeout errors (429, 500, 502, 503, 504, network errors) are retried with backoff.
+  - Each request times out after 60 seconds (`LLM_TIMEOUT_SECONDS`).
+  - Overload and timeout errors (429, 500, 502, 503, 504, network errors) are retried with backoff, and an overloaded model fails over to the next one in `GEMINI_FALLBACK_MODELS`.
   - Repeated server errors stop further API calls for that scan, and each item is attempted at most once per scan.
 - **Manual fallback.** **Export to Gemini web** downloads a JSON file, copies instructions and opens Gemini; **Import results from Gemini web** turns Gemini's answer back into drafts.
 
@@ -155,7 +155,7 @@ linkedin-dm-assistant/
 │   ├── browser-profile/        #   Saved LinkedIn browser session
 │   └── gemini-chrome/          #   Saved Gemini web session (dedicated Chrome/Edge profile)
 └── dm_assistant/
-    ├── __init__.py
+    ├── __init__.py             # Package marker (docstring only)
     ├── __main__.py             # CLI entry point (serve, scan, login, gemini-login, gemini-test,
     │                           #   context, email-test, models, llm-test)
     ├── config.py               # Reads .env into a Settings object
@@ -189,7 +189,7 @@ linkedin-dm-assistant/
 | `gemini_selectors.py` | CSS selectors for gemini.google.com: chat box, send/stop buttons, answers, code blocks, signed-out marker and model menu. Update this file when Gemini web drafting breaks. |
 | `linkedin.py` | Opens a real Chromium browser with your saved session and reads the conversation list and threads. Decides whether each thread is a reply or a connection follow-up. Posts a reply **only** when called by the Send button, after checking for new messages. |
 | `email_client.py` | Reads over IMAP with `BODY.PEEK`, so emails are not marked as read. Builds thread context from `References` headers and detects automation headers. Sends replies and new emails over SMTP, then appends a copy to Sent and sets `\Answered`. TLS uses the `truststore` packag for verifcation via the Windows certificate verifier. |
-| `llm.py` | Builds the system prompt from your context and the channel-specific user prompts. This includes the meeting rule, which is open-ended by default, and the rule that your instructions take precedence. Calls Gemini with a JSON schema and a 2-minute timeout, throttles for the free tier, retries transient errors (429/500/502/503/504 and network errors), and falls back to other models if one is retired. |
+| `llm.py` | Builds the system prompt from your context and the channel-specific user prompts. This includes the meeting rule, which is open-ended by default, and the rule that your instructions take precedence. Calls Gemini (or an OpenAI-compatible API) with a JSON schema and a 60-second timeout, throttles for the free tier, retries transient errors (429/500/502/503/504 and network errors), and falls back to other models if one is retired or overloaded. |
 | `gemini_web.py` | Starts the dedicated Chrome/Edge profile with a local debugging port and attaches Playwright to it. Types each batch into a new Gemini chat, waits for the answer to finish, reads the JSON from the page and imports it. Also handles one-off redrafts, `gemini-login` and `gemini-test`. Only one Gemini session runs at a time. |
 | `handoff.py` | Turns every "thing to draft" into a payload. Drafts it with the API, or queues it, depending on `DRAFT_BACKEND` and API health. Each item is tried at most once per scan, and two server errors in a row mark the API as down for the rest of the scan. Builds the Gemini-web export, including revision prompts for regenerate, and parses Gemini's answer on import. |
 | `pipeline.py` | Runs one scan. Each channel runs separately, so a LinkedIn error doesn't block email and vice versa. With the web backend, the queue is sent to Gemini web at the end. Overlapping scans are skipped and logged. |
@@ -327,7 +327,7 @@ __pycache__/
 | `GEMINI_WEB_URL` | `https://gemini.google.com/app` | Gemini web app address. |
 | `GEMINI_WEB_BROWSER` | *(auto-detect)* | Full path to `chrome.exe` or `msedge.exe`, if auto-detection fails. |
 | `GEMINI_WEB_DEBUG_PORT` | `9333` | Local DevTools port used to control the Gemini browser. Change it if something else uses the port. |
-| `GEMINI_WEB_MODEL` | *(empty)* | Text of the entry to pick in Gemini's model menu, e.g. `Pro`. Leave empty to keep whatever is selected. If selection fails, the current model is used and a warning is logged. |
+| `GEMINI_WEB_MODEL` | *(empty)* | Text of the entry to pick in Gemini's model menu, e.g. `Fast` or `Pro`. Leave empty to keep whatever is selected. **`Fast` is recommended**: Thinking/Pro models can take over a minute even for small prompts. If selection fails, the current model is used and a warning is logged. |
 | `GEMINI_WEB_BATCH_SIZE` | `8` | Messages per Gemini chat (one prompt per batch). Lower it if long batches fail to type in or time out. |
 | `GEMINI_WEB_TIMEOUT_SECONDS` | `600` | How long to wait for Gemini's answer. Thinking models can take a few minutes on a big batch. |
 | `GEMINI_WEB_HEADLESS` | `false` | Run the Gemini browser without a window. This is experimental; Google may treat headless browsers differently. |
@@ -337,12 +337,24 @@ __pycache__/
 | Variable | Default | Description |
 |---|---|---|
 | `GEMINI_API_KEY` | *(empty)* | Google AI Studio key. With the `web` backend it isn't used. |
-| `GEMINI_MODEL` | `gemini-3.8-flash` | Model to use. Run `python -m dm_assistant models` to see which models your key can access. |
-| `GEMINI_FALLBACK_MODELS` | *(empty)* | Comma-separated backups, tried in order if the main model is retired or unavailable. |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Model to use. Run `python -m dm_assistant models` to see which models your key can access. If the main model is often overloaded, set a lighter one such as `gemini-flash-lite-latest`. |
+| `GEMINI_FALLBACK_MODELS` | `gemini-flash-latest,gemini-flash-lite-latest` | Comma-separated backups, tried in order if the main model is retired, overloaded (429/5xx) or times out. Leaving it empty uses the default list. |
+| `LLM_TIMEOUT_SECONDS` | `60` | Per-request timeout for API calls (both providers). |
 | `GEMINI_TEMPERATURE` | *(empty)* | Leave empty to use the model's default. |
 | `LLM_MIN_INTERVAL_SECONDS` | `7` | Minimum gap between API calls, to stay under free-tier per-minute limits. |
 
-The API request timeout (2 minutes) and retry schedule (10 s / 30 s / 60 s) are set in `llm.py`.
+The retry schedule is set in `llm.py`: 10 s / 30 s / 60 s for the last model, and a single 4 s retry for earlier models so the app moves on to the next fallback quickly.
+
+### Other LLM providers (optional)
+| Variable | Default | Description |
+|---|---|---|
+| `LLM_PROVIDER` | `gemini` | `gemini`, or `openai` for any OpenAI-compatible chat API (OpenAI, Groq, OpenRouter, ...). |
+| `OPENAI_API_KEY` | *(empty)* | Key for the provider. Required when `LLM_PROVIDER=openai`. |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Change this for Groq, OpenRouter, etc. |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Model name. |
+| `OPENAI_FALLBACK_MODELS` | *(empty)* | Comma-separated backups. |
+
+This provider is optional and has not been tested against a live key. The `models` command only applies to Gemini.
 
 
 ### Schedule & UI
@@ -639,12 +651,12 @@ The New outreach page has the same option: **Export to Gemini web instead**.
 | `Couldn't find Chrome or Edge` | Set `GEMINI_WEB_BROWSER` to the full path of `chrome.exe` or `msedge.exe`. |
 | `Gemini's chat box wasn't found`, or answers never finish / aren't read | Gemini changed its layout. Update `dm_assistant/gemini_selectors.py`: run `gemini-login`, right-click the element → Inspect, then `gemini-test`. |
 | `Only N of M characters reached Gemini's input box` | Lower `GEMINI_WEB_BATCH_SIZE`. |
-| `Gemini didn't finish answering within …s` | Raise `GEMINI_WEB_TIMEOUT_SECONDS`, lower `GEMINI_WEB_BATCH_SIZE`, or pick a faster model. |
+| `Gemini didn't finish answering within …s` | Set `GEMINI_WEB_MODEL=Fast`, lower `GEMINI_WEB_BATCH_SIZE`, or raise `GEMINI_WEB_TIMEOUT_SECONDS`. A screenshot of the page is saved to `data/gemini-timeout.png`; if it shows a finished answer, the selectors in `gemini_selectors.py` need updating. |
 | `Couldn't find any results … Gemini said: …` | Gemini answered without JSON, often because of a usage-limit or error message. Retry later with **✨ Draft these in Gemini now**. |
 | `Couldn't select Gemini model …` (warning) | The model menu changed or the label didn't match. Fix `GEMINI_WEB_MODEL` or the model-menu selectors; drafting continues with the current model. |
 | Gemini `404 … model no longer available` (API) | Run `python -m dm_assistant models`, update `GEMINI_MODEL`, and set `GEMINI_FALLBACK_MODELS`. Also run `pip install -U google-genai`. |
 | Gemini `429` / quota exhausted (API) | Items are queued automatically. With `DRAFT_BACKEND=auto` they're drafted in Gemini web during the same scan; otherwise use **Export to Gemini web**, or wait for the quota to reset. Free-tier limits are listed at https://ai.google.dev/gemini-api/docs/rate-limits. |
-| Gemini `503` / `504 DEADLINE_EXCEEDED` (API) | These are temporary overload or timeout errors and are retried automatically. If they persist, remaining items are queued for that scan. Consider `DRAFT_BACKEND=auto` or `web`. |
+| Gemini `503` / `504 DEADLINE_EXCEEDED` (API) | Temporary overload or timeout errors. They are retried, then the next model in `GEMINI_FALLBACK_MODELS` is tried. If every model fails, remaining items are queued for that scan. Set `GEMINI_MODEL=gemini-flash-lite-latest` if the main model is regularly overloaded, or use `DRAFT_BACKEND=auto` or `web`. |
 | Email: `CERTIFICATE_VERIFY_FAILED … unable to get local issuer certificate` | Run `pip install truststore` (it's in `requirements.txt`), make sure `email_client.py` uses it, then run `python -m dm_assistant email-test`. Without it, Python relies on the Windows certificate store, which is filled in lazily, so the error comes and goes. |
 | Email login fails | Check the address and password. If your mailbox uses two-factor authentication, you may need an application-specific password from the webmail security settings. |
 | Sent copies go to the wrong folder | Set `EMAIL_SENT_FOLDER` (see the folder shown by `email-test`). |
@@ -693,6 +705,11 @@ Back up `data/assistant.db` if you want to keep your context history and sent-me
 ## Changelog
 
 
+- **Reliability fixes.**
+  - API: overloaded or timed-out models fail over to `GEMINI_FALLBACK_MODELS` (now defaulting to `gemini-flash-latest,gemini-flash-lite-latest`); request timeout is 60 s (`LLM_TIMEOUT_SECONDS`).
+  - Gemini web: an answer is accepted once its text has stopped growing, even if the Stop-button selector still matches; a watchdog closes the browser if something hangs; timeouts save `data/gemini-timeout.png`; `gemini-test` times out after 120 s.
+  - New optional `LLM_PROVIDER=openai` for OpenAI-compatible APIs.
+  - `dm_assistant/__init__.py` no longer contains an outdated copy of `config.py`.
 - **Gemini web backend.**
   - New `DRAFT_BACKEND` setting (`web` is the default), new `gemini_web.py` and `gemini_selectors.py`, and new `gemini-login` and `gemini-test` commands.
   - Drafts are written in the Gemini app with your own account, with no copy/paste.

@@ -49,6 +49,10 @@ def main() -> None:
 
     if cmd == "models":
         from . import llm
+        print(f"Provider: {settings.llm_provider}")
+        if settings.llm_provider == "openai":
+            print("`models` only applies to the Gemini provider.")
+            return
         print(f"Configured: GEMINI_MODEL={settings.gemini_model}\n")
         for model_id, display in llm.list_models():
             marker = "  <- configured" if model_id == settings.gemini_model else ""
@@ -89,8 +93,9 @@ def main() -> None:
         return
 
     # serve
-    if settings.use_api and not settings.gemini_api_key:
-        print("⚠ GEMINI_API_KEY is not set - API drafting will fail"
+    key_missing = (not settings.openai_api_key) if settings.llm_provider == "openai" else (not settings.gemini_api_key)
+    if settings.use_api and key_missing:
+        print(f"⚠ The API key for LLM_PROVIDER={settings.llm_provider} is not set - API drafting will fail"
               + (" (the Gemini web app will be used instead)." if settings.use_web else "."))
     if not settings.my_name:
         print("⚠️  LINKEDIN_MY_NAME is not set - the assistant can't tell your messages from theirs.")

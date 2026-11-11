@@ -22,11 +22,23 @@ def _bool(name: str, default: bool) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
+    # gemini = Gemini API (default) | openai = any OpenAI-compatible chat API (OpenAI, Groq, OpenRouter, ...)
+    llm_provider: str = _env("LLM_PROVIDER", "gemini").lower()
+    llm_timeout_s: float = float(_env("LLM_TIMEOUT_SECONDS", "60"))
+    openai_api_key: str = _env("OPENAI_API_KEY")
+    openai_base_url: str = _env("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+    openai_model: str = _env("OPENAI_MODEL", "gpt-4o-mini")
+    openai_fallback_models: tuple[str, ...] = tuple(
+        m.strip() for m in _env("OPENAI_FALLBACK_MODELS").split(",") if m.strip()
+    )
+
     gemini_api_key: str = _env("GEMINI_API_KEY")
     gemini_model: str = _env("GEMINI_MODEL", "gemini-3.8-flash")
-    # Tried in order if the main model is unavailable (comma-separated)
+    # Tried in order when the main model is unavailable OR overloaded (comma-separated)
     gemini_fallback_models: tuple[str, ...] = tuple(
-        m.strip() for m in _env("GEMINI_FALLBACK_MODELS").split(",") if m.strip()
+        m.strip()
+        for m in (_env("GEMINI_FALLBACK_MODELS") or "gemini-flash-latest,gemini-flash-lite-latest").split(",")
+        if m.strip()
     )
     # Empty = use the model's default temperature (recommended for newer Gemini models)
     gemini_temperature: float | None = float(_env("GEMINI_TEMPERATURE")) if _env("GEMINI_TEMPERATURE") else None
