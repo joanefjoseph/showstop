@@ -102,7 +102,7 @@ def _get_client() -> genai.Client:
             raise RuntimeError("GEMINI_API_KEY is not set (get one at https://aistudio.google.com/apikey)")
         _client = genai.Client(
             api_key=settings.gemini_api_key,
-            http_options=types.HttpOptions(timeout=120_000),  # 2 min per request
+            http_options=types.HttpOptions(timeout=int(settings.llm_timeout_s * 1000)),
         )
     return _client
 
@@ -293,9 +293,9 @@ def _is_model_unavailable(e: errors.APIError) -> bool:
 _RETRY_CODES = (429, 500, 502, 503, 504)
 
 
-def _generate_with(model: str, system: str, prompt: str) -> DraftResult:
+def _generate_with(model: str, system: str, prompt: str, backoff: list[int] | None = None) -> DraftResult:
     global _last_call
-    backoff = [10, 30, 60]
+    backoff = [10, 30, 60] if backoff is None else backoff
     for attempt in range(len(backoff) + 1):
         with _throttle_lock:
             wait = settings.llm_min_interval_s - (time.monotonic() - _last_call)
@@ -303,7 +303,16 @@ def _generate_with(model: str, system: str, prompt: str) -> DraftResult:
                 time.sleep(wait)
             _last_call = time.monotonic()
         try:
-            resp = _get_client().models.generate_content(...)   # unchanged
+            resp = _get_client().models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    response_mime_type="application/json",
+                    response_schema=DraftResult,
+                    temperature=settings.gemini_temperature,  # None = model default
+                ),
+            )
             parsed: Any = resp.parsed
             if isinstance(parsed, DraftResult):
                 return parsed
@@ -328,18 +337,117 @@ def _generate_with(model: str, system: str, prompt: str) -> DraftResult:
     raise RuntimeError("unreachable")
 
 
-def _generate(system: str, prompt: str) -> DraftResult:
-    """Try the configured model, then the fallbacks, when a model is retired/unavailable."""
-    global _active_model
-    failures: list[str] = []
-    for model in _candidate_models():
+class LLMError(RuntimeError):
+    """Error from the OpenAI-compatible provider. `code` is the HTTP status (0 = network)."""
+
+    def __init__(self, message: str, code: int = 0):
+        super().__init__(message)
+        self.code = code
+
+
+def _openai_chat(model: str, system: str, prompt: str, backoff: list[int], json_mode: bool = True) -> DraftResult:
+    global _last_call
+    if not settings.openai_api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set")
+    schema_hint = (
+        "\n\nRespond with ONLY a JSON object with exactly these keys: "
+        "needs_reply (boolean), category (string), summary (string), reply (string), rationale (string). "
+        "No markdown, no code fences, no other text."
+    )
+    body: dict[str, Any] = {
+        "model": model,
+        "messages": [{"role": "system", "content": system + schema_hint},
+                     {"role": "user", "content": prompt}],
+    }
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
+    if settings.gemini_temperature is not None:
+        body["temperature"] = settings.gemini_temperature
+    url = settings.openai_base_url + "/chat/completions"
+    headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
+    for attempt in range(len(backoff) + 1):
+        with _throttle_lock:
+            wait = settings.llm_min_interval_s - (time.monotonic() - _last_call)
+            if wait > 0:
+                time.sleep(wait)
+            _last_call = time.monotonic()
         try:
-            result = _generate_with(model, system, prompt)
+            r = httpx.post(url, json=body, headers=headers, timeout=settings.llm_timeout_s)
+        except httpx.TransportError as e:
+            if attempt < len(backoff):
+                log.warning("Network error talking to %s (%s); retrying in %ss", url, e, backoff[attempt])
+                time.sleep(backoff[attempt])
+                continue
+            raise LLMError(f"Network error: {e}", 0) from e
+        if r.status_code == 400 and json_mode and "response_format" in r.text:
+            return _openai_chat(model, system, prompt, backoff, json_mode=False)
+        if r.status_code in _RETRY_CODES and attempt < len(backoff):
+            log.warning("LLM %s on %s; retrying in %ss", r.status_code, model, backoff[attempt])
+            time.sleep(backoff[attempt])
+            continue
+        if r.status_code >= 400:
+            raise LLMError(f"{r.status_code} on {model}: {r.text[:300]}", r.status_code)
+        try:
+            text = r.json()["choices"][0]["message"]["content"] or ""
+            text = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", text.strip())
+            m = re.search(r"\{.*\}", text, re.S)
+            return DraftResult.model_validate_json(m.group(0) if m else text)
+        except (ValueError, KeyError, IndexError) as e:
+            if attempt < len(backoff):
+                log.warning("Bad model output from %s (%s); retrying", model, e)
+                continue
+            raise LLMError(f"Bad model output from {model}: {e}", 502) from e
+    raise RuntimeError("unreachable")
+
+
+def _generate_openai(system: str, prompt: str) -> DraftResult:
+    global _active_model
+    models = [m for m in ([_active_model] if _active_model else []) + [settings.openai_model,
+              *settings.openai_fallback_models] if m]
+    models = list(dict.fromkeys(models))
+    last: Exception | None = None
+    for i, model in enumerate(models):
+        try:
+            result = _openai_chat(model, system, prompt, [5, 15] if i == len(models) - 1 else [3])
+        except LLMError as e:
+            if e.code in (404, 400) or e.code >= 500 or e.code == 0:
+                log.warning("Model %s failed (%s); trying next", model, e)
+                last = e
+                continue
+            raise
+        _active_model = model
+        return result
+    raise last or RuntimeError("no models configured")
+
+
+def _generate(system: str, prompt: str) -> DraftResult:
+    """Try the configured model, then the fallbacks, when a model is retired/unavailable/overloaded."""
+    global _active_model
+    if settings.llm_provider == "openai":
+        return _generate_openai(system, prompt)
+    failures: list[str] = []
+    candidates = _candidate_models()
+    last_error: Exception | None = None
+    for i, model in enumerate(candidates):
+        is_last = i == len(candidates) - 1
+        try:
+            # Overloaded model + others available: don't sit through long retries, move on quickly.
+            result = _generate_with(model, system, prompt, None if is_last else [4])
         except errors.APIError as e:
             if _is_model_unavailable(e):
                 msg = getattr(e, "message", None) or str(e)
                 log.warning("Gemini model %s unavailable: %s", model, msg)
                 failures.append(f"{model}: {msg}")
+                continue
+            if e.code in _RETRY_CODES and not is_last:
+                log.warning("Gemini model %s overloaded (%s); trying %s", model, e.code, candidates[i + 1])
+                last_error = e
+                continue
+            raise
+        except httpx.TransportError as e:
+            if not is_last:
+                log.warning("Gemini model %s timed out (%s); trying %s", model, e, candidates[i + 1])
+                last_error = e
                 continue
             raise
         if model != _active_model:
