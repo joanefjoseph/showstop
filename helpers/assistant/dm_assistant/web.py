@@ -9,7 +9,7 @@ from urllib.parse import quote_plus, urlparse
 
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, url_for
 
-from . import db, email_client, gemini_web, handoff, linkedin, llm, pipeline, scheduler
+from . import db, email_client, gemini_web, handoff, hunter, linkedin, llm, pipeline, scheduler
 from .config import settings
 
 log = logging.getLogger(__name__)
@@ -82,6 +82,8 @@ def context_page():
 def _render_outreach(form, selected, status: int = 200):
     return render_template("outreach.html", form=form, selected=selected,
                            note_limit=settings.connect_note_limit,
+                           contacts=db.list_outreach_contacts(),
+                           hunter_enabled=bool(settings.hunter_api_key),
                            email_enabled=settings.email_enabled), status
 
 
@@ -157,6 +159,15 @@ def _save_fields(d: dict, data: dict) -> None:
             meta[key] = (data.get(key) or "").strip()
     db.update_draft(d["id"], meta_json=json.dumps(meta, ensure_ascii=False))
     d["meta"] = meta
+
+
+@app.post("/api/hunter/find")
+def api_hunter_find():
+    data = request.get_json() or {}
+    try:
+        return jsonify(ok=True, **hunter.find_email(data.get("name", ""), data.get("company", "")))
+    except hunter.HunterError as e:
+        return jsonify(ok=False, error=str(e)), 200
 
 
 @app.get("/api/status")

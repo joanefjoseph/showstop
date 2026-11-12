@@ -13,6 +13,14 @@
 message using your company context; you review, edit and send it from the Drafts page.</p>
 
 <form class="card" method="post" onsubmit="const b=document.getElementById('go'); b.disabled=true; b.textContent='Drafting…';">
+  {% if contacts %}
+  <label class="full">Reuse a previous contact (fills the boxes below; edit before drafting)
+    <select id="reuse" onchange="reuseContact(this.value)" style="width:100%;padding:8px 10px;border:1px solid #ccc;border-radius:8px;font:inherit;margin-top:4px">
+      <option value="">- choose -</option>
+      {% for c in contacts %}<option value="{{ loop.index0 }}">{{ c.name }}{% if c.role %} - {{ c.role }}{% endif %}</option>{% endfor %}
+    </select></label>
+  <script id="contacts-data" type="application/json">{{ contacts | tojson }}</script>
+  {% endif %}
   <div class="grid">
     <label>Name *
       <input name="name" required value="{{ form.get('name', '') }}" placeholder="Jane Doe"></label>
@@ -23,6 +31,15 @@ message using your company context; you review, edit and send it from the Drafts
     <label>Email address
       <input name="email" type="email" value="{{ form.get('email', '') }}" placeholder="jane@acme.com"></label>
   </div>
+  {% if hunter_enabled %}
+  <div class="full">Find their email with Hunter.io (uses the Name above and the company/website below)
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <input id="hunter-company" placeholder="Company name or website, e.g. Acme Logistics or acme.com" style="flex:1;padding:8px 10px;border:1px solid #ccc;border-radius:8px;font:inherit">
+      <button type="button" id="hunter-btn" onclick="findEmail()">🔎 Find email</button>
+    </div>
+    <div class="status" id="hunter-status"></div>
+  </div>
+  {% endif %}
 
   <label class="full">Who are they? (what you know: what their team does, how you found them, anything relevant)
     <textarea name="about" rows="4">{{ form.get('about', '') }}</textarea></label>
@@ -51,6 +68,35 @@ message using your company context; you review, edit and send it from the Drafts
   <div class="status" id="export-status"></div>
 </form>
 <script>
+async function findEmail() {
+  const name = document.querySelector('[name="name"]').value.trim();
+  const roleEl = document.querySelector('[name="role"]');
+  const companyEl = document.getElementById('hunter-company');
+  if (!companyEl.value.trim()) {  // guess from "Role at Company"
+    const m = roleEl.value.match(/\bat\s+(.+)$/i);
+    if (m) companyEl.value = m[1].trim();
+  }
+  const status = document.getElementById('hunter-status'), btn = document.getElementById('hunter-btn');
+  btn.disabled = true; status.textContent = 'Searching…';
+  try {
+    const r = await fetch('/api/hunter/find', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                          body: JSON.stringify({name, company: companyEl.value})});
+    const d = await r.json();
+    if (d.ok) {
+      document.querySelector('[name="email"]').value = d.email;
+      status.textContent = `Found ${d.email} (Hunter confidence ${d.score ?? '?'}%, ${d.sources} source(s)). Check it before sending.`;
+    } else status.textContent = d.error;
+  } catch (e) { status.textContent = 'Lookup failed: ' + e; }
+  btn.disabled = false;
+}
+function reuseContact(i) {
+  if (i === '') return;
+  const c = JSON.parse(document.getElementById('contacts-data').textContent)[Number(i)];
+  for (const k of ['name','role','linkedin_url','email','about','reason','instruction']) {
+    const el = document.querySelector(`[name="${k}"]`);
+    if (el) el.value = c[k] || '';
+  }
+}
 async function exportOutreach() {
   const form = document.querySelector('form');
   if (!form.reportValidity()) return;

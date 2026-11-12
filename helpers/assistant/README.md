@@ -77,6 +77,8 @@ It can also:
 - A form for people you haven't talked to yet: name, LinkedIn URL, email address, role and company, who they are, why you want to talk, and an optional **extra instruction** (e.g. "suggest a call but let them pick the time").
 - It drafts a **LinkedIn connect note** (with a live character counter), a **LinkedIn DM**, or a **cold email** with subject and body. The closing ask matches the outcome you described; it isn't automatically a call.
 - What you enter about a person is **reused later**. When they accept your note or reply to your message, the reply draft knows who they are. The extra instruction is stored with the draft and used again when you regenerate.
+- **Reuse a previous contact.** A dropdown at the top of the form lists everyone you've entered before (latest entry per person, matched by email or name) and fills in all the boxes so you can edit and draft again. The data comes from `data/assistant.db`.
+- **Find email (Hunter.io).** With `HUNTER_API_KEY` set, enter a first and last name plus a company name or website and click **Find email**. The result fills the Email box with Hunter's confidence score. Always check it before sending.
 
 
 ### Drafting with Gemini
@@ -166,6 +168,7 @@ linkedin-dm-assistant/
     ├── email_client.py         # IMAP/SMTP: read the inbox, thread context, automation signals, send + save to Sent
     ├── llm.py                  # Gemini API client, prompts (replies, follow-ups, email, outreach), retries, model fallback
     ├── gemini_web.py           # Drives the Gemini web app: batches, regenerate, sign-in, self-test
+    ├── hunter.py               # Hunter.io Email Finder lookup (New outreach page)
     ├── handoff.py              # Draft-or-queue per backend, Gemini-web export/import, payload builders
     ├── pipeline.py             # One scan: API queue retry → LinkedIn → email → Gemini web batches
     ├── scheduler.py            # APScheduler jobs for RUN_TIMES + wake-up watchdog
@@ -356,6 +359,11 @@ The retry schedule is set in `llm.py`: 10 s / 30 s / 60 s for the last model, an
 
 This provider is optional and has not been tested against a live key. The `models` command only applies to Gemini.
 
+
+### Email lookup (Hunter.io, optional)
+| Variable | Default | Description |
+|---|---|---|
+| `HUNTER_API_KEY` | *(empty)* | Your Hunter.io API key. When set, the New outreach page shows a **Find email** button. Keep it in `.env` only. Each successful search uses one of your Hunter search credits. |
 
 ### Schedule & UI
 | Variable | Default | Description |
@@ -556,9 +564,9 @@ Before sending, search the draft for `[square brackets]`. The assistant uses the
 
 
 ### New outreach
-1. Click **🚀 New outreach**.
+1. Click **🚀 New outreach**. To repeat someone you've entered before, pick them in **Reuse a previous contact**.
 2. Fill in the name and why you want to talk. Optionally add:
-   - their LinkedIn URL, email, role and company;
+   - their LinkedIn URL, email, role and company (if you only know their company, use **🔎 Find email**, which needs `HUNTER_API_KEY`);
    - who they are;
    - an extra instruction for this draft.
 3. Tick one or more of **connect note**, **LinkedIn DM** and **email**, then click **Draft message(s)**.
@@ -705,6 +713,7 @@ Back up `data/assistant.db` if you want to keep your context history and sent-me
 ## Changelog
 
 
+- **Outreach conveniences.** New outreach has a **Reuse a previous contact** dropdown and an optional Hunter.io **Find email** button (`HUNTER_API_KEY`, new `hunter.py`).
 - **Reliability fixes.**
   - API: overloaded or timed-out models fail over to `GEMINI_FALLBACK_MODELS` (now defaulting to `gemini-flash-latest,gemini-flash-lite-latest`); request timeout is 60 s (`LLM_TIMEOUT_SECONDS`).
   - Gemini web: an answer is accepted once its text has stopped growing, even if the Stop-button selector still matches; a watchdog closes the browser if something hangs; timeouts save `data/gemini-timeout.png`; `gemini-test` times out after 120 s.

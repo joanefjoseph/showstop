@@ -317,7 +317,28 @@ def find_outreach_contact(*, name: str = "", email: str = "") -> dict | None:
             return meta
     return None
 
-# ---------------------------------------------------------------- runs
+
+def list_outreach_contacts() -> list[dict]:
+    """Every person you've entered on the outreach form (latest entry per person, newest first)."""
+    with connect() as c:
+        rows = c.execute(
+            "SELECT meta_json FROM drafts WHERE kind LIKE 'outreach%' ORDER BY id DESC"
+        ).fetchall()
+    seen, out = set(), []
+    for r in rows:
+        meta = json.loads(r["meta_json"] or "{}")
+        name = (meta.get("name") or "").strip()
+        if not name:
+            continue
+        key = (meta.get("email") or "").strip().lower() or name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({k: meta.get(k, "") for k in
+                    ("name", "role", "linkedin_url", "email", "about", "reason", "instruction")})
+    return out
+
+
 def start_run(trigger: str) -> int:
     with connect() as c:
         cur = c.execute("INSERT INTO runs (trigger, started_at, status) VALUES (?, ?, 'running')",
