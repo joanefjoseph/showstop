@@ -24,6 +24,7 @@ def _bool(name: str, default: bool) -> bool:
 class Settings:
     # gemini = Gemini API (default) | openai = any OpenAI-compatible chat API (OpenAI, Groq, OpenRouter, ...)
     llm_provider: str = _env("LLM_PROVIDER", "gemini").lower()
+    hunter_api_key: str = _env("HUNTER_API_KEY")
     llm_timeout_s: float = float(_env("LLM_TIMEOUT_SECONDS", "60"))
     openai_api_key: str = _env("OPENAI_API_KEY")
     openai_base_url: str = _env("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
